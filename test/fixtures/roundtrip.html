@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Rundlauf-Prüfung</title>
+  </head>
+  <body>
+    <!--
+      Prüfstand für den Emulator-Adapter — nicht Teil der App.
+
+      Getestet wird die Zusage, auf der das ganze Speichersystem ruht: Ein
+      Schnappschuss muss den Zustand exakt einfrieren und exakt
+      wiederherstellen. Stimmt hier ein Byte nicht, verliert man später
+      mitten in einem Level seinen Fortschritt.
+
+      Genau das ging dem Vorgängerkern (WasmBoy) ab: Er lieferte jedes Mal
+      denselben Speicher vom Ladezeitpunkt zurück, während das Spiel weiterlief.
+      Deshalb prüft dieser Durchlauf ausdrücklich, dass sich die Stände
+      überhaupt voneinander unterscheiden.
+
+      Läuft über den Vite-Dev-Server, damit derselbe Quellcode geprüft wird,
+      den auch die App benutzt — und keine Nachbildung.
+    -->
+    <canvas id="screen" width="160" height="144"></canvas>
+
+    <script type="module">
+      import { BinjgbCore } from '/src/emulator/binjgb-core.ts';
+
+      const ergebnisse = [];
+      const pruefe = (name, bestanden, detail = '') =>
+        ergebnisse.push({ name, bestanden, detail });
+
+      /**
+       * Streng: alles, was kein befülltes Uint8Array ist, gilt als ungleich.
+       * Eine nachsichtige Variante hatte hier schon einmal einen echten
+       * Fehler zugedeckt, weil sie zwei leere Werte für identisch hielt.
+       */
+      const gleich = (a, b) => {
+        if (!(a instanceof Uint8Array) || !(b instanceof Uint8Array)) return false;
+        if (a.length === 0 || b.length === 0) return false;
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+        return true;
+      };
+
+      const warte = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      try {
+        const core = new BinjgbCore();
+        await core.init(document.getElementById('screen'));
+
+        const antwort = await fetch('./generated/testrom.gb');
+        const rom = new Uint8Array(await antwort.arrayBuffer());
+        pruefe('ROM geladen', rom.length === 32768, `${rom.length} Bytes`);
+
+        await core.loadRom(rom);
+        await core.play();
+        pruefe('Emulator läuft', core.isRunning());
+
+        await warte(400);
+        const a = await core.snapshot();
+        const aVorher = a.data.slice();
+        pruefe(
+          'Schnappschuss enthält Daten',
+          a.data instanceof Uint8Array && a.data.length > 0,
+          `${a.data.length} Bytes`,
+        );
+
+        await warte(400);
+        const b = await core.snapshot();
+
+        // Das Testprogramm zählt eine Speicherzelle hoch. Sind zwei
+        // Schnappschüsse identisch, stand der Emulator still — oder der Kern
+        // liefert, wie der Vorgänger, immer denselben alten Speicher.
+        pruefe(
+          'Emulation schreitet voran',
+          !gleich(a.data, b.data),
+          'zwei Schnappschüsse müssen sich unterscheiden',
+        );
+
+        // Ein Schnappschuss muss ein Standbild sein, keine Sicht auf den
+        // laufenden Speicher.
+        pruefe(
+          'Ein Schnappschuss bleibt unverändert',
+          gleich(aVorher, a.data),
+          'der erste Stand darf sich durch den zweiten nicht ändern',
+        );
+
+        // Kernzusage: zurückspielen und erneut sichern ergibt denselben Zustand.
+        await core.restore(a);
+        const c = await core.snapshot();
+        pruefe('Wiederherstellung ist byte-genau', gleich(a.data, c.data), `${a.data.length} Bytes verglichen`);
+
+        // Derselbe Stand muss beliebig oft ladbar sein — sonst wäre ein
+        // Speicherplatz nach einmaligem Gebrauch verbraucht.
+        await core.restore(a);
+        const d = await core.snapshot();
+        pruefe('Derselbe Stand lässt sich mehrfach laden', gleich(a.data, d.data));
+
+        // Nach dem Laden muss es weiterlaufen können, ohne stehenzubleiben.
+        await warte(400);
+        const e = await core.snapshot();
+        pruefe(
+          'Nach dem Laden läuft die Emulation weiter',
+          !gleich(a.data, e.data),
+          'sonst hinge das Spiel nach jedem Laden',
+        );
+
+        // Ein Stand aus einem fremden Kern darf nicht stillschweigend
+        // durchrutschen, sonst stürzt der Emulator irgendwo tief drinnen ab.
+        let abgewiesen = false;
+        try {
+          await core.restore({ core: 'irgendein-anderer-kern', data: a.data });
+        } catch {
+          abgewiesen = true;
+        }
+        pruefe('Fremder Speicherstand wird abgewiesen', abgewiesen);
+
+        // Ein zu kurzer Stand ebenso — etwa der eines anderen Spiels.
+        let laengeGeprueft = false;
+        try {
+          await core.restore({ core: a.core, data: a.data.slice(0, 32) });
+        } catch {
+          laengeGeprueft = true;
+        }
+        pruefe('Stand mit falscher Länge wird abgewiesen', laengeGeprueft);
+
+        await core.pause();
+        pruefe('Pause hält den Emulator an', !core.isRunning());
+
+        // Neustart muss den Ausgangszustand herstellen, nicht den letzten.
+        await core.reset();
+        const nachReset = await core.snapshot();
+        pruefe(
+          'Neustart setzt den Zustand zurück',
+          !gleich(nachReset.data, e.data),
+          'sonst startete das Spiel mitten im Geschehen',
+        );
+      } catch (fehler) {
+        pruefe('Durchlauf ohne Ausnahme', false, String(fehler?.stack ?? fehler));
+      }
+
+      window.__ergebnisse = ergebnisse;
+      document.title = 'fertig';
+    </script>
+  </body>
+</html>

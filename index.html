@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      viewport-fit=cover  → Layout darf unter Dynamic Island / Home-Indicator,
+                            wir federn es mit env(safe-area-inset-*) wieder ab.
+      user-scalable=no    → kein Doppeltipp-Zoom mitten im Spiel.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Adventures of LOLO</title>
+    <meta name="description" content="Game Boy auf dem iPhone — mit Auto-Speichern und Speicherplätzen." />
+
+    <link rel="manifest" href="/Adventures-of-LOLO/manifest.webmanifest" />
+    <meta name="theme-color" content="#1b1b1f" />
+
+    <!-- iOS nimmt "Zum Home-Bildschirm" nur mit diesen Angaben ernst. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LOLO" />
+    <link rel="apple-touch-icon" href="/Adventures-of-LOLO/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/Adventures-of-LOLO/icons/icon.svg" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

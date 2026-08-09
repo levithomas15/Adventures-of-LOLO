@@ -1,0 +1,735 @@
+/*
+ * Das Gehäuse.
+ *
+ * Nachgebaut ist die Form des grauen Handhelds von 1989 — Bildschirmrahmen,
+ * Steuerkreuz, die beiden schrägen Knöpfe, das Lautsprechergitter. Bewusst
+ * *ohne* fremde Wortmarken: wo im Original ein Hersteller steht, steht hier
+ * der Name dieser App.
+ */
+
+:root {
+  --gehaeuse: #cfcabc;
+  --gehaeuse-kante: #b3ae9f;
+  --gehaeuse-tief: #96917f;
+  --rahmen: #5b5b66;
+  --rahmen-kante: #43434c;
+  --knopf-ab: #9c3062;
+  --knopf-ab-kante: #75234a;
+  --knopf-grau: #6d6d78;
+  --knopf-grau-kante: #4f4f58;
+  --kreuz: #2e2e33;
+  --kreuz-kante: #1a1a1e;
+  --led: #e0322c;
+  --schrift: #55505f;
+  --schrift-hell: #8d8798;
+
+  /* Bildschirmpalette — wird von den Themen unten überschrieben. */
+  --lcd-0: #9bbc0f; /* hellster Ton, zugleich der Hintergrund */
+  --lcd-3: #0f380f; /* dunkelster Ton */
+
+  --radius-gehaeuse: 14px 14px 58px 14px;
+
+  color-scheme: dark;
+}
+
+/* Alternative Bildschirmpaletten. */
+[data-palette='pocket'] {
+  --lcd-0: #c4cfa1;
+  --lcd-3: #1a1c17;
+}
+[data-palette='light'] {
+  --lcd-0: #92d1c8;
+  --lcd-3: #0d3b36;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #14141a;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  color: #e8e6ef;
+
+  /* Auf iOS sonst: Gummiband-Scrollen, Lupe beim Halten, Auswahl-Marker. */
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------- Gehäuse */
+
+.geraet {
+  /* dvh statt vh: Safari zählt die einfahrende Adressleiste sonst nicht mit,
+     und das Steuerkreuz landet unter dem Bildschirmrand. */
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top) + 6px) calc(env(safe-area-inset-right) + 8px)
+    calc(env(safe-area-inset-bottom) + 6px) calc(env(safe-area-inset-left) + 8px);
+}
+
+.gehaeuse {
+  width: min(100%, 430px);
+  height: 100%;
+  max-height: 900px;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 2vh, 18px);
+  padding: clamp(10px, 2.4vw, 18px);
+  background: linear-gradient(160deg, #d8d3c6 0%, var(--gehaeuse) 42%, #bdb8a9 100%);
+  border-radius: var(--radius-gehaeuse);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.18),
+    0 18px 40px rgba(0, 0, 0, 0.55);
+  touch-action: none;
+}
+
+/* ------------------------------------------------------------ Bildschirm */
+
+.rahmen {
+  position: relative;
+  background: linear-gradient(155deg, var(--rahmen) 0%, var(--rahmen-kante) 100%);
+  border-radius: 10px 10px 34px 10px;
+  /* Links extra Platz für die Betriebsanzeige — wie beim Original steht sie
+     neben dem Bildschirm, nicht darauf. */
+  padding: clamp(14px, 3.4vw, 24px) clamp(12px, 3vw, 20px) clamp(20px, 4vw, 30px) 30px;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.rahmen-oben {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: #a9a6b8;
+}
+
+.rahmen-oben::before,
+.rahmen-oben::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #8f8ca0, transparent);
+}
+
+/* Betriebsanzeige in der linken Spalte. Die Beschriftung steht hochkant —
+   so, wie beim Original "BATTERY" neben der Leuchte steht, und nur so passt
+   sie in die schmale Spalte, ohne unter den Bildschirm zu rutschen. */
+.betrieb {
+  position: absolute;
+  left: 8px;
+  top: 44%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 7px;
+  letter-spacing: 0.14em;
+  color: #a9a6b8;
+  pointer-events: none;
+}
+
+.betrieb span:last-child {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.led {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #5c2321;
+  transition: background 220ms ease, box-shadow 220ms ease;
+}
+
+.led[data-an='true'] {
+  background: var(--led);
+  box-shadow: 0 0 9px 2px rgba(224, 50, 44, 0.75);
+}
+
+.bildschirm {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 160 / 144;
+  margin-left: auto;
+  background: var(--lcd-0);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bildschirm canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+
+  /* Ohne das interpoliert der Browser die 160×144 zu Matsch. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Feines Raster, das an ein echtes LCD erinnert. Abschaltbar. */
+.bildschirm[data-raster='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.10) 0 1px,
+    transparent 1px 2px
+  );
+  mix-blend-mode: multiply;
+}
+
+.bildschirm-hinweis {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  text-align: center;
+  color: var(--lcd-3);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* -------------------------------------------------------------- Wortmarke */
+
+.wortmarke {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  font-size: clamp(13px, 3.6vw, 17px);
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: -0.01em;
+  color: var(--schrift);
+}
+
+.wortmarke span {
+  font-size: 0.62em;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.12em;
+  color: var(--schrift-hell);
+}
+
+/* ------------------------------------------------------------- Bedienung */
+
+.bedienung {
+  flex: 1;
+  display: grid;
+  grid-template-areas:
+    'kreuz  ab'
+    'mitte  mitte';
+  grid-template-columns: 1fr 1fr;
+  align-content: space-evenly;
+  align-items: center;
+  gap: clamp(6px, 1.6vh, 14px) 0;
+  min-height: 0;
+}
+
+/* Steuerkreuz — eine einzige Trefferfläche. Die Richtung ergibt sich aus der
+   Lage zum Mittelpunkt (siehe input/touch.ts), sonst gäbe es keine
+   Diagonalen und kein Durchziehen des Daumens. */
+.kreuz {
+  grid-area: kreuz;
+  position: relative;
+  justify-self: center;
+  width: clamp(108px, 30vw, 138px);
+  aspect-ratio: 1;
+  touch-action: none;
+}
+
+.kreuz-arm {
+  position: absolute;
+  background: linear-gradient(150deg, #3c3c42 0%, var(--kreuz) 55%, var(--kreuz-kante) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 2px 3px rgba(0, 0, 0, 0.4);
+}
+
+.kreuz-arm.waagerecht {
+  left: 0;
+  right: 0;
+  top: 33.34%;
+  height: 33.33%;
+  border-radius: 7px;
+}
+
+.kreuz-arm.senkrecht {
+  top: 0;
+  bottom: 0;
+  left: 33.34%;
+  width: 33.33%;
+  border-radius: 7px;
+}
+
+/* Mittelkuppe — rein optisch, nimmt keine Berührungen entgegen. */
+.kreuz-mitte {
+  position: absolute;
+  left: 33.34%;
+  top: 33.34%;
+  width: 33.33%;
+  height: 33.33%;
+  background: radial-gradient(circle at 40% 35%, #4a4a52, #26262b 70%);
+  border-radius: 3px;
+}
+
+/* Richtungsanzeige: hebt hervor, was der Emulator gerade empfängt.
+   Bei einem Spiel, in dem ein Feld zu weit den Level kostet, ist diese
+   Rückmeldung mehr als Zierde. */
+.kreuz-pfeil {
+  position: absolute;
+  width: 33.33%;
+  height: 33.33%;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  opacity: 0;
+  transition: opacity 60ms linear;
+  pointer-events: none;
+}
+.kreuz-pfeil[data-aktiv='true'] {
+  opacity: 1;
+}
+.kreuz-pfeil.oben {
+  left: 33.34%;
+  top: 0;
+}
+.kreuz-pfeil.unten {
+  left: 33.34%;
+  bottom: 0;
+}
+.kreuz-pfeil.links {
+  left: 0;
+  top: 33.34%;
+}
+.kreuz-pfeil.rechts {
+  right: 0;
+  top: 33.34%;
+}
+
+/* A und B, im typischen Winkel nebeneinander. */
+.ab {
+  grid-area: ab;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 4vw, 24px);
+  transform: rotate(-22deg);
+}
+
+.rundknopf {
+  position: relative;
+  width: clamp(52px, 15vw, 66px);
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #b7477a 0%, var(--knopf-ab) 52%, var(--knopf-ab-kante) 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.28),
+    0 4px 0 var(--knopf-ab-kante),
+    0 6px 8px rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 700;
+  touch-action: none;
+  transition: transform 45ms ease, box-shadow 45ms ease;
+}
+
+.rundknopf[data-gedrueckt='true'] {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.35),
+    0 1px 0 var(--knopf-ab-kante);
+}
+
+/* Die Beschriftung steht im Original *neben* dem Knopf, nicht darauf. */
+.rundknopf::after {
+  content: attr(data-marke);
+  position: absolute;
+  bottom: -19px;
+  left: 50%;
+  transform: translateX(-50%) rotate(22deg);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--schrift);
+}
+
+.mitte {
+  grid-area: mitte;
+  display: flex;
+  justify-content: center;
+  gap: clamp(18px, 6vw, 34px);
+  transform: rotate(-22deg);
+}
+
+.pille {
+  position: relative;
+  width: clamp(58px, 17vw, 74px);
+  height: clamp(15px, 4.2vw, 19px);
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(160deg, #83838f 0%, var(--knopf-grau) 55%, var(--knopf-grau-kante) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 3px 0 var(--knopf-grau-kante),
+    0 5px 6px rgba(0, 0, 0, 0.3);
+  touch-action: none;
+  transition: transform 45ms ease, box-shadow 45ms ease;
+}
+
+.pille[data-gedrueckt='true'] {
+  transform: translateY(2px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.pille::after {
+  content: attr(data-marke);
+  position: absolute;
+  bottom: -17px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--schrift);
+}
+
+/* ------------------------------------------------------- Lautsprecher */
+
+/* Reine Zierde — und deshalb unbedingt für Berührungen durchlässig.
+   Durch die Drehung ragt das Gitter über sein eigenes Kästchen hinaus und
+   lag sonst über der Menüleiste: Der Knopf "Menü" war sichtbar, ließ sich
+   aber nicht drücken. Der End-zu-End-Test ist genau darüber gestolpert. */
+.lautsprecher {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 6px;
+  overflow: hidden;
+  pointer-events: none;
+  transform: rotate(-22deg);
+  transform-origin: right center;
+}
+
+.lautsprecher i {
+  width: 5px;
+  height: 34px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--gehaeuse-tief), var(--gehaeuse-kante));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* --------------------------------------------------------- Menüleiste */
+
+.leiste {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.leiste-knopf {
+  flex: 1;
+  padding: 7px 4px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.09);
+  color: var(--schrift);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  touch-action: manipulation;
+}
+
+.leiste-knopf:active {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.leiste-knopf[disabled] {
+  opacity: 0.4;
+}
+
+/* ------------------------------------------------------------ Overlays */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(8, 8, 12, 0.72);
+  backdrop-filter: blur(6px);
+  padding: calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 12px);
+}
+
+.blatt {
+  width: min(100%, 430px);
+  max-height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background: #1e1e26;
+  border: 1px solid #32323e;
+  border-radius: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.blatt h2 {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+
+.blatt h3 {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #9a97ab;
+}
+
+.blatt p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #b8b5c6;
+}
+
+.knopf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #3a3a48;
+  border-radius: 11px;
+  background: #2a2a35;
+  color: #eceaf3;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  touch-action: manipulation;
+}
+
+.knopf:active {
+  background: #34343f;
+}
+
+.knopf.wichtig {
+  background: #3d6b45;
+  border-color: #4d8557;
+}
+
+.knopf.gefahr {
+  background: #4a2630;
+  border-color: #6d3241;
+  color: #f0c8d0;
+}
+
+.knopf[disabled] {
+  opacity: 0.45;
+}
+
+.knopf-reihe {
+  display: flex;
+  gap: 8px;
+}
+
+/* Speicherplätze */
+
+.plaetze {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.platz {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid #3a3a48;
+  border-radius: 10px;
+  background: #24242e;
+  color: #eceaf3;
+  font-family: inherit;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.platz[data-belegt='false'] {
+  border-style: dashed;
+  color: #74718a;
+}
+
+.platz:active {
+  background: #2e2e3a;
+}
+
+.platz img,
+.platz .platz-leer {
+  width: 100%;
+  aspect-ratio: 160 / 144;
+  border-radius: 5px;
+  background: #16161c;
+  image-rendering: pixelated;
+  object-fit: cover;
+}
+
+.platz .platz-leer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #46445a;
+}
+
+.platz-name {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.platz-zeit {
+  font-size: 9px;
+  color: #8b88a0;
+}
+
+/* Meldungen */
+
+/* Über der Menüleiste, nicht darauf: sonst verdeckt eine Meldung genau die
+   Knöpfe, die man als Nächstes drücken will. */
+.meldung {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 72px);
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: min(92vw, 400px);
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(20, 20, 28, 0.94);
+  border: 1px solid #3a3a48;
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.meldung[data-art='fehler'] {
+  background: rgba(58, 22, 30, 0.96);
+  border-color: #7a3244;
+  color: #f4ccd4;
+}
+
+.hinweis {
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: #26262f;
+  border: 1px solid #383845;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #b8b5c6;
+}
+
+.hinweis strong {
+  color: #e8e6ef;
+}
+
+.feld {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13.5px;
+}
+
+.feld select {
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid #3a3a48;
+  background: #2a2a35;
+  color: #eceaf3;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.schalter {
+  width: 46px;
+  height: 27px;
+  flex: none;
+  border: none;
+  border-radius: 999px;
+  background: #3d3d4a;
+  position: relative;
+  transition: background 160ms ease;
+}
+
+.schalter[data-an='true'] {
+  background: #4d8557;
+}
+
+.schalter::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 160ms ease;
+}
+
+.schalter[data-an='true']::after {
+  transform: translateX(19px);
+}
+
+.versteckt {
+  display: none;
+}
+
+/* Auf sehr flachen Fenstern (Querformat) den Bildschirm nicht erdrücken. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .gehaeuse {
+    width: min(100%, 620px);
+  }
+  .kreuz {
+    width: clamp(88px, 18vw, 118px);
+  }
+}

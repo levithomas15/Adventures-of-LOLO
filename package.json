@@ -1,0 +1,30 @@
+{
+  "name": "adventures-of-lolo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Game-Boy-PWA fürs iPhone — spielt deine eigenen .gb-ROMs in einem originalgetreuen DMG-Gehäuse.",
+  "license": "MIT",
+  "scripts": {
+    "vendor": "node scripts/vendor-libarchive.mjs",
+    "predev": "npm run vendor",
+    "dev": "vite",
+    "prebuild": "npm run vendor",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --import ./test/register-hooks.mjs --test test/*.test.mjs",
+    "test:e2e": "node test/e2e.mjs"
+  },
+  "dependencies": {
+    "idb": "^8.0.0",
+    "libarchive.js": "^2.0.2",
+    "preact": "^10.24.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.0",
+    "playwright": "^1.48.0",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0"
+  }
+}

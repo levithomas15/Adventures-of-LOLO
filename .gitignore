@@ -1,0 +1,18 @@
+node_modules/
+dist/
+
+# Wird von scripts/vendor-libarchive.mjs aus node_modules erzeugt.
+# binjgb daneben ist dagegen eingecheckt: Es kommt nicht aus npm, und der
+# Build soll nicht von einem Netzabruf abhängen.
+public/vendor/libarchive/
+.DS_Store
+*.log
+
+# Niemals ROMs oder Archive einchecken — die gehören dir, nicht dem Repo.
+*.gb
+*.gbc
+*.7z
+*.zip
+
+# Testdateien und Screenshots werden bei Bedarf erzeugt.
+test/fixtures/generated/
