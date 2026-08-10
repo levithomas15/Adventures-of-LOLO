@@ -34,7 +34,7 @@ if (!existsSync(join(root, 'dist', 'index.html'))) {
   process.exit(1);
 }
 
-const { archivePath } = makeFixtures();
+const { archivePath, nesArchivePath, mixedArchivePath } = makeFixtures();
 
 const server = spawn(
   'npx',
@@ -93,6 +93,52 @@ try {
 
   await page.waitForSelector('input[type=file][accept*=".7z"]', { state: 'attached', timeout: 15000 });
   pruefe('Startbildschirm fragt nach einem ROM', await page.locator('text=Spiel laden').isVisible());
+
+  // --- Archiv mit ROMs eines anderen Systems -----------------------------
+
+  // Der Fall aus der Praxis: ein Archiv namens "Adventures of Lolo", das
+  // ausschließlich NES-ROMs enthält. Die Meldung muss benennen, was drin
+  // liegt — "nichts gefunden" schickt den Nutzer sonst auf die falsche Fährte.
+  await page.setInputFiles('input[type=file][accept*=".7z"]', nesArchivePath);
+  await page.waitForSelector('.hinweis:has-text("NES")', { timeout: 30000 });
+  const nesMeldung = (await page.locator('.hinweis:has-text("NES")').first().textContent()) ?? '';
+
+  pruefe('NES-Archiv wird als solches benannt', /3 NES-ROMs/.test(nesMeldung), nesMeldung.trim().slice(0, 90));
+  pruefe(
+    'Meldung nennt die gebrauchte Dateiart',
+    /\.gb/.test(nesMeldung),
+    'sagt, dass eine .gb-Datei nötig ist',
+  );
+  pruefe(
+    'Meldung erklärt die beiden Fassungen',
+    /1989/.test(nesMeldung) && /1994/.test(nesMeldung),
+  );
+
+  // --- Auswahl bei mehreren Abzügen --------------------------------------
+
+  await page.setInputFiles('input[type=file][accept*=".7z"]', mixedArchivePath);
+  await page.waitForSelector('text=Welches Spiel?', { timeout: 30000 });
+
+  const sichtbar = await page.locator('.kandidat').count();
+  pruefe('Beschädigte Abzüge sind zunächst ausgeblendet', sichtbar === 2, `${sichtbar} von 5 sichtbar`);
+
+  const erster = (await page.locator('.kandidat').first().textContent()) ?? '';
+  pruefe('Geprüfter Abzug steht oben', /\[!\]/.test(erster), erster.trim().slice(0, 60));
+  pruefe(
+    'Eintrag zeigt den Titel aus dem Header',
+    /TESTROM/.test(erster),
+    'nicht nur den Dateinamen',
+  );
+
+  await page.locator('.knopf:has-text("Auch beschädigte Dumps anzeigen")').click();
+  const alle = await page.locator('.kandidat').count();
+  pruefe('Aufklappen zeigt alle Abzüge', alle === 5, `${alle} von 5`);
+
+  const letzter = (await page.locator('.kandidat').last().getAttribute('data-guete')) ?? '';
+  pruefe('Beschädigte stehen unten', letzter === 'problematisch', `data-guete=${letzter}`);
+
+  await page.locator('.knopf:has-text("Zurück")').click();
+  await page.waitForTimeout(300);
 
   await page.setInputFiles('input[type=file][accept*=".7z"]', archivePath);
 

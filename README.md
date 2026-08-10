@@ -24,6 +24,20 @@ Erkannt wird das ROM am Nintendo-Logo im Cartridge-Header, nicht an der
 Dateiendung. Beipack wie `liesmich.txt` im Archiv wird übersprungen, und
 liegen mehrere Spiele darin, fragt die App nach.
 
+**ROMs anderer Systeme werden benannt.** Enthält das Archiv etwa NES-Dateien,
+sagt die App das auch — statt nur „nichts gefunden" zu melden. *Adventures of
+Lolo* gibt es nämlich zweimal: NES (1989) und Game Boy (1994), mit jeweils
+eigenen Leveln. Diese App emuliert einen Game Boy und braucht deshalb die
+Fassung von 1994.
+
+**Beschädigte Abzüge sind ausgeblendet.** In ROM-Sammlungen steckt die Güte
+im Dateinamen: `[!]` geprüft, `[T+Ger]` übersetzt, `[b1]`/`[o1]`/`[h1]`
+beschädigt, überdumpt oder verändert. Die Auswahl zeigt die brauchbaren zuerst
+und klappt den Rest weg — in einem typischen Satz ist die Mehrheit der Dateien
+defekt, und ohne Vorsortierung greift man leicht daneben und hält dann den
+Emulator für schuld. Jeder Eintrag nennt zusätzlich den Titel aus dem
+Cartridge-Header, weil sich die Dateinamen oft nur um ein Kürzel unterscheiden.
+
 ## Einrichten auf dem iPhone
 
 1. Die Seite in **Safari** öffnen.

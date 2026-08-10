@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 
 import {
   computeHeaderChecksum,
+  erkenneFremdsystem,
   looksLikeGameBoyRom,
   parseRomHeader,
   romFingerprint,
 } from '../src/emulator/rom.ts';
-import { buildFakeRom } from './helpers/fake-rom.mjs';
+import { buildFakeNesRom, buildFakeRom } from './helpers/fake-rom.mjs';
 
 test('liest Titel und Kenndaten aus dem Header', () => {
   const header = parseRomHeader(buildFakeRom({ title: 'TESTROM' }));
@@ -63,6 +64,32 @@ test('Fingerabdruck ist stabil und unterscheidet ROMs', async () => {
   assert.equal(a, b, 'gleiche Datei muss gleiche Kennung ergeben');
   assert.notEqual(a, c);
   assert.match(a, /^[0-9a-f]{40}$/);
+});
+
+test('erkennt NES-ROMs am iNES-Header', () => {
+  // Der Fall, der das ausgelöst hat: ein Archiv "Adventures of Lolo" voller
+  // NES-ROMs. Ohne diese Erkennung sagt die App nur, sie habe nichts
+  // gefunden — und man sucht den Fehler beim Emulator.
+  const nes = buildFakeNesRom();
+  assert.equal(erkenneFremdsystem(nes, 'Adventures of Lolo (U) [!].nes'), 'NES');
+  assert.equal(looksLikeGameBoyRom(nes), false, 'darf nicht als Game Boy durchgehen');
+
+  // Auch ohne sprechenden Dateinamen, allein am Kopf.
+  assert.equal(erkenneFremdsystem(nes, 'spiel.bin'), 'NES');
+});
+
+test('erkennt weitere Systeme an der Endung', () => {
+  const leer = new Uint8Array(64);
+  assert.equal(erkenneFremdsystem(leer, 'spiel.gba'), 'Game Boy Advance');
+  assert.equal(erkenneFremdsystem(leer, 'spiel.sfc'), 'Super Nintendo');
+  assert.equal(erkenneFremdsystem(leer, 'spiel.z64'), 'Nintendo 64');
+  assert.equal(erkenneFremdsystem(leer, 'spiel.md'), 'Mega Drive');
+});
+
+test('ein echtes Game-Boy-ROM gilt nicht als Fremdsystem', () => {
+  const gb = buildFakeRom();
+  assert.equal(erkenneFremdsystem(gb, 'Adventures of Lolo (U) [!].gb'), null);
+  assert.equal(erkenneFremdsystem(gb, 'liesmich.txt'), null);
 });
 
 test('Fingerabdruck stimmt auch für einen View auf einen größeren Puffer', async () => {

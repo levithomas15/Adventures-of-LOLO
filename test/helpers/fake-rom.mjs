@@ -21,6 +21,21 @@ export const NINTENDO_LOGO = Uint8Array.from([
 /** Register der Hintergrundpalette — das Testprogramm lässt es durchlaufen. */
 export const BGP_ADDRESS = 0xff47;
 
+/**
+ * Eine NES-Attrappe: nur der iNES-Kopf und Füllbytes, kein lauffähiges
+ * Programm. Mehr braucht es nicht — geprüft wird ausschließlich, dass die
+ * App sie als Fremdsystem erkennt und das auch sagt, statt bloß "nichts
+ * gefunden" zu melden.
+ */
+export function buildFakeNesRom({ prgBanks = 2, chrBanks = 4 } = {}) {
+  const rom = new Uint8Array(16 + prgBanks * 16384 + chrBanks * 8192);
+  rom.set([0x4e, 0x45, 0x53, 0x1a], 0); // "NES\x1A"
+  rom[4] = prgBanks;
+  rom[5] = chrBanks;
+  rom[6] = 0x10; // Mapper 1 (MMC1), wie bei Adventures of Lolo
+  return rom;
+}
+
 export function buildFakeRom({ title = 'TESTROM', cartridgeType = 0x00 } = {}) {
   const rom = new Uint8Array(0x8000); // 32 KiB, die kleinste gültige Größe
 

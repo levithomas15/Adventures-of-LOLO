@@ -156,6 +156,63 @@ export function looksLikeGameBoyRom(data: Uint8Array): boolean {
   return true;
 }
 
+/**
+ * Erkennt ROMs *anderer* Systeme.
+ *
+ * Anlass war ein Archiv namens "Adventures of Lolo", das 22 NES-ROMs enthielt
+ * und keine einzige Game-Boy-Datei. Die App wusste das bereits — sie hatte die
+ * Dateien entpackt und geprüft — sagte aber nur "keine Game-Boy-ROM-Datei".
+ * Damit sucht man den Fehler beim Emulator statt bei der Datei.
+ *
+ * Das Spiel gibt es nämlich zweimal: NES (1989) und Game Boy (1994), mit
+ * eigenen Leveln. Wer das nicht weiß, kommt von allein nicht darauf.
+ *
+ * Gibt den Systemnamen zurück oder `null`, wenn nichts Bekanntes erkannt wird.
+ */
+export function erkenneFremdsystem(data: Uint8Array, dateiname = ''): string | null {
+  // NES: der iNES-Header ist eindeutig und steht ganz vorn.
+  if (
+    data.length >= 16 &&
+    data[0] === 0x4e && // N
+    data[1] === 0x45 && // E
+    data[2] === 0x53 && // S
+    data[3] === 0x1a
+  ) {
+    return 'NES';
+  }
+
+  // Für die übrigen Systeme genügt die Endung. Ihre Kopfdaten sicher zu
+  // erkennen wäre deutlich aufwendiger, und der Zweck ist ohnehin nur, dem
+  // Nutzer zu sagen, woran es liegt — nicht, die Datei zu verarbeiten.
+  const endung = dateiname.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
+  switch (endung) {
+    case 'nes':
+    case 'unf':
+    case 'unif':
+      return 'NES';
+    case 'gba':
+      return 'Game Boy Advance';
+    case 'smc':
+    case 'sfc':
+    case 'swc':
+      return 'Super Nintendo';
+    case 'n64':
+    case 'z64':
+    case 'v64':
+      return 'Nintendo 64';
+    case 'md':
+    case 'gen':
+    case 'smd':
+      return 'Mega Drive';
+    case 'nds':
+      return 'Nintendo DS';
+    case 'sms':
+      return 'Master System';
+    default:
+      return null;
+  }
+}
+
 /** SHA-1 als stabile ROM-Identität (erkennt Re-Importe derselben Datei). */
 export async function romFingerprint(rom: Uint8Array): Promise<string> {
   // Eigener ArrayBuffer, weil `rom` ein View auf einen größeren Puffer sein kann.

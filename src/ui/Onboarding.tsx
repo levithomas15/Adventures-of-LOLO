@@ -1,5 +1,6 @@
 import { useRef, useState } from 'preact/hooks';
-import { readRomCandidates, type RomCandidate } from '../import/archive';
+import { readRomCandidates, type DumpGuete, type RomCandidate } from '../import/archive';
+import { parseRomHeader } from '../emulator/rom';
 import { isIos, isStandalone } from '../platform/persist';
 
 /**
@@ -9,6 +10,58 @@ import { isIos, isStandalone } from '../platform/persist';
  * wird, und den Import so einfach machen, dass er auf einem Telefon in zwei
  * Tipps erledigt ist — Archiv inklusive.
  */
+
+const GUETE_BESCHRIFTUNG: Record<DumpGuete, string> = {
+  geprueft: 'Geprüfter Abzug',
+  normal: '',
+  uebersetzung: 'Übersetzung',
+  problematisch: 'Beschädigter Abzug',
+};
+
+/**
+ * Ein Eintrag der Auswahlliste.
+ *
+ * Zeigt außer dem Dateinamen den Titel aus dem Cartridge-Header und die
+ * Größe. In einem ROM-Satz unterscheiden sich die Dateinamen oft nur um ein
+ * Kürzel in Klammern — der interne Titel sagt dagegen, was man wirklich
+ * lädt.
+ */
+function KandidatenKnopf({
+  candidate,
+  disabled,
+  onWaehlen,
+}: {
+  candidate: RomCandidate;
+  disabled: boolean;
+  onWaehlen: () => void;
+}) {
+  let untertitel = `${Math.round(candidate.data.length / 1024)} KB`;
+  try {
+    const header = parseRomHeader(candidate.data);
+    if (header.title) untertitel = `${header.title} · ${untertitel}`;
+    if (!header.checksumValid) untertitel += ' · Prüfsumme falsch';
+  } catch {
+    // Kein lesbarer Header — dann bleibt es bei der Größe.
+  }
+
+  const marke = GUETE_BESCHRIFTUNG[candidate.guete];
+
+  return (
+    <button
+      type="button"
+      class="knopf kandidat"
+      disabled={disabled}
+      onClick={onWaehlen}
+      data-guete={candidate.guete}
+    >
+      <span class="kandidat-name">{candidate.name}</span>
+      <span class="kandidat-info">
+        {marke ? `${marke} · ` : ''}
+        {untertitel}
+      </span>
+    </button>
+  );
+}
 
 interface Props {
   onImport: (candidate: RomCandidate) => Promise<void>;
@@ -22,6 +75,7 @@ export function Onboarding({ onImport, onRestoreBackup }: Props) {
   const [busy, setBusy] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [auswahl, setAuswahl] = useState<RomCandidate[] | null>(null);
+  const [zeigeAlle, setZeigeAlle] = useState(false);
 
   const zeigeInstallhinweis = isIos() && !isStandalone();
 
@@ -58,18 +112,27 @@ export function Onboarding({ onImport, onRestoreBackup }: Props) {
   }
 
   if (auswahl) {
+    const brauchbar = auswahl.filter((k) => k.guete !== 'problematisch');
+    const kaputt = auswahl.filter((k) => k.guete === 'problematisch');
+    const sichtbar = zeigeAlle ? [...brauchbar, ...kaputt] : brauchbar;
+
     return (
       <div class="overlay">
         <div class="blatt">
           <h2>Welches Spiel?</h2>
-          <p>Im Archiv stecken mehrere ROMs. Wähle das gewünschte aus.</p>
-          {auswahl.map((candidate) => (
-            <button
+          <p>
+            Im Archiv stecken {auswahl.length} ROMs.
+            {kaputt.length > 0
+              ? ` ${kaputt.length} davon sind als beschädigt gekennzeichnet und zunächst ausgeblendet.`
+              : ''}
+          </p>
+
+          {sichtbar.map((candidate) => (
+            <KandidatenKnopf
               key={candidate.name}
-              type="button"
-              class="knopf"
+              candidate={candidate}
               disabled={busy}
-              onClick={async () => {
+              onWaehlen={async () => {
                 setBusy(true);
                 try {
                   await onImport(candidate);
@@ -78,10 +141,24 @@ export function Onboarding({ onImport, onRestoreBackup }: Props) {
                   setBusy(false);
                 }
               }}
-            >
-              {candidate.name}
-            </button>
+            />
           ))}
+
+          {kaputt.length > 0 && !zeigeAlle ? (
+            <button type="button" class="knopf" onClick={() => setZeigeAlle(true)}>
+              Auch beschädigte Dumps anzeigen ({kaputt.length})
+            </button>
+          ) : null}
+
+          {zeigeAlle && kaputt.length > 0 ? (
+            <div class="hinweis">
+              Einträge mit <strong>[b…]</strong>, <strong>[o…]</strong> oder{' '}
+              <strong>[h…]</strong> sind unvollständige, zu große oder veränderte
+              Abzüge. Sie starten oft gar nicht oder hängen sich mitten im Spiel
+              auf — nimm sie nur, wenn nichts anderes da ist.
+            </div>
+          ) : null}
+
           <button type="button" class="knopf" onClick={() => setAuswahl(null)}>
             Zurück
           </button>

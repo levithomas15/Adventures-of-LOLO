@@ -571,6 +571,40 @@ body {
   gap: 8px;
 }
 
+/* Eintrag der ROM-Auswahl: Dateiname oben, Herkunft und Größe darunter. */
+.kandidat {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  text-align: left;
+}
+
+.kandidat-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.kandidat-info {
+  font-size: 11px;
+  font-weight: 400;
+  color: #9a97ab;
+}
+
+/* Beschädigte Abzüge bleiben wählbar, sehen aber nicht einladend aus. */
+.kandidat[data-guete='problematisch'] {
+  border-color: #5c3a44;
+  background: #2a2027;
+}
+
+.kandidat[data-guete='problematisch'] .kandidat-info {
+  color: #c9899a;
+}
+
+.kandidat[data-guete='geprueft'] {
+  border-color: #43684b;
+}
+
 /* Speicherplätze */
 
 .plaetze {
