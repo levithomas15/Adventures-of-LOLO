@@ -241,6 +241,7 @@ export function App() {
           type="button"
           class="knopf"
           style="max-width: 190px"
+          data-bedienelement
           onClick={() => void (fortsetzbar ? fortsetzen() : session.play())}
         >
           {fortsetzbar ? 'Weiterspielen' : 'Starten'}

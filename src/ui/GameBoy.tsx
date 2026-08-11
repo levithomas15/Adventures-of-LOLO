@@ -153,11 +153,20 @@ export function GameBoy(props: Props) {
           <i />
         </div>
 
+        {/* Diese beiden hängen an onClick und liegen im Gehäuse — ohne die
+            Markierung schluckt die Touch-Behandlung ihren Klick (siehe
+            input/touch.ts). */}
         <div class="leiste">
-          <button type="button" class="leiste-knopf" onClick={onTogglePause} disabled={!canPause}>
+          <button
+            type="button"
+            class="leiste-knopf"
+            data-bedienelement
+            onClick={onTogglePause}
+            disabled={!canPause}
+          >
             {running ? 'Pause' : 'Weiter'}
           </button>
-          <button type="button" class="leiste-knopf" onClick={onMenu}>
+          <button type="button" class="leiste-knopf" data-bedienelement onClick={onMenu}>
             Menü
           </button>
         </div>

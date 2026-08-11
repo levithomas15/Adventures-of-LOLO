@@ -49,6 +49,12 @@ interface Region {
 
 const TOUCH_EVENTS = ['touchstart', 'touchmove', 'touchend', 'touchcancel'] as const;
 
+/**
+ * Kennzeichnet Bedienelemente im Gehäuse, die auf `click` angewiesen sind
+ * und deshalb von der Touch-Behandlung ausgenommen bleiben müssen.
+ */
+export const UI_MARKER = 'data-bedienelement';
+
 /** Bildschirmkoordinaten: 0° = rechts, 90° = unten. */
 function directionsFromAngle(degrees: number): GameBoyButton[] {
   const cardinals: Array<{ at: number; button: GameBoyButton }> = [
@@ -144,7 +150,18 @@ export class TouchController {
   #listener: EventListener = (event) => this.#handleTouch(event as TouchEvent);
 
   #handleTouch = (event: TouchEvent): void => {
-    // Verhindert Scrollen, Gummiband-Effekt, Lupe und Doppeltipp-Zoom.
+    // `preventDefault()` unterdrückt auf Touch-Geräten das nachfolgende
+    // `click`-Ereignis. Für Steuerkreuz und Knöpfe ist das gewollt — sie
+    // brauchen kein Klick-Ereignis und sollen weder scrollen noch zoomen.
+    //
+    // Bedienelemente wie "Starten", "Pause" oder "Menü" liegen aber ebenfalls
+    // im Gehäuse und hängen an `onClick`. Ohne diese Ausnahme waren sie auf
+    // dem iPhone schlicht tot: Der Emulator lief, die Knöpfe reagierten nie.
+    // Mit der Maus fiel das nicht auf, weil `click` dort unabhängig von
+    // Touch-Ereignissen entsteht — der Grund, warum die Tests es übersahen.
+    const ziel = event.target as Element | null;
+    if (ziel?.closest?.(`[${UI_MARKER}]`)) return;
+
     event.preventDefault();
 
     if (event.type === 'touchstart' && this.#onFirstTouch) {

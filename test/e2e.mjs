@@ -87,6 +87,26 @@ try {
     if (m.type() === 'error') fehler.push(m.text());
   });
 
+  /**
+   * Tippt wie ein Finger — nicht wie eine Maus.
+   *
+   * Der Unterschied ist nicht kosmetisch: `locator.click()` erzeugt ein
+   * Klick-Ereignis unabhängig von Touch-Ereignissen. Ein echter Fingertipp
+   * dagegen entsteht aus touchstart/touchend, und ein `preventDefault()`
+   * darauf unterdrückt den Klick.
+   *
+   * Genau daran ist die App auf dem iPhone gescheitert, während sämtliche
+   * Tests grün blieben: Sie klickten mit der Maus an der Ursache vorbei.
+   * Deshalb läuft hier alles über echte Berührungen.
+   */
+  const tippe = async (locator) => {
+    const ziel = locator.first();
+    await ziel.scrollIntoViewIfNeeded();
+    const kasten = await ziel.boundingBox();
+    if (!kasten) throw new Error('Element ist nicht sichtbar, kann nicht getippt werden.');
+    await page.touchscreen.tap(kasten.x + kasten.width / 2, kasten.y + kasten.height / 2);
+  };
+
   await page.goto(BASIS, { waitUntil: 'networkidle' });
 
   // --- Import ------------------------------------------------------------
@@ -130,14 +150,14 @@ try {
     'nicht nur den Dateinamen',
   );
 
-  await page.locator('.knopf:has-text("Auch beschädigte Dumps anzeigen")').click();
+  await tippe(page.locator('.knopf:has-text("Auch beschädigte Dumps anzeigen")'));
   const alle = await page.locator('.kandidat').count();
   pruefe('Aufklappen zeigt alle Abzüge', alle === 5, `${alle} von 5`);
 
   const letzter = (await page.locator('.kandidat').last().getAttribute('data-guete')) ?? '';
   pruefe('Beschädigte stehen unten', letzter === 'problematisch', `data-guete=${letzter}`);
 
-  await page.locator('.knopf:has-text("Zurück")').click();
+  await tippe(page.locator('.knopf:has-text("Zurück")'));
   await page.waitForTimeout(300);
 
   await page.setInputFiles('input[type=file][accept*=".7z"]', archivePath);
@@ -172,17 +192,51 @@ try {
   await page.waitForTimeout(150);
   pruefe('Steuerkreuz nimmt Berührungen an', true, 'ohne Ausnahme ausgelöst');
 
+  // --- Bedienelemente im Gehäuse reagieren auf Fingertipps ---------------
+
+  // Der Fehler, der die App auf dem iPhone unbenutzbar machte: Die
+  // Touch-Behandlung rief bei jeder Berührung preventDefault() auf, was den
+  // nachfolgenden Klick unterdrückt. "Pause", "Menü" und "Starten" liegen im
+  // Gehäuse und hängen an onClick — sie blieben damit wirkungslos, während
+  // die Tests mit Mausklicks daran vorbeiprüften.
+  await tippe(page.locator('.leiste-knopf', { hasText: 'Pause' }));
+  await page.waitForTimeout(600);
+  const nachPause = (await page.locator('.leiste-knopf').first().textContent()) ?? '';
+  pruefe(
+    'Pause reagiert auf einen Fingertipp',
+    nachPause.includes('Weiter'),
+    `Beschriftung danach: "${nachPause.trim()}"`,
+  );
+
+  // Wieder anlaufen lassen — ebenfalls per Finger.
+  await tippe(page.locator('.leiste-knopf', { hasText: 'Weiter' }));
+  await page.waitForTimeout(600);
+  const nachWeiter = (await page.locator('.leiste-knopf').first().textContent()) ?? '';
+  pruefe(
+    'Weiter reagiert auf einen Fingertipp',
+    nachWeiter.includes('Pause'),
+    `Beschriftung danach: "${nachWeiter.trim()}"`,
+  );
+
   // --- Speichern ---------------------------------------------------------
 
-  await page.locator('.leiste-knopf', { hasText: 'Menü' }).click();
+  await tippe(page.locator('.leiste-knopf', { hasText: 'Menü' }));
   await page.waitForSelector('text=Speicherplätze', { timeout: 10000 });
   pruefe('Menü öffnet und pausiert', true);
 
   const plaetze = page.locator('.plaetze').first().locator('.platz');
-  await plaetze.nth(0).click();
-  await page.waitForTimeout(800);
+  await tippe(plaetze.nth(0));
 
-  const belegt = await plaetze.nth(0).getAttribute('data-belegt');
+  // Auf den geschriebenen Zustand warten, nicht auf eine geschätzte Dauer.
+  const belegt = await page
+    .waitForFunction(
+      () => document.querySelector('.plaetze .platz')?.getAttribute('data-belegt') === 'true',
+      null,
+      { timeout: 8000 },
+    )
+    .then(() => 'true')
+    .catch(async () => await plaetze.nth(0).getAttribute('data-belegt'));
+
   pruefe('Speicherplatz 1 ist danach belegt', belegt === 'true', `data-belegt=${belegt}`);
 
   const hatVorschau = await plaetze.nth(0).locator('img').count();
@@ -199,7 +253,7 @@ try {
   const weiter = page.locator('button', { hasText: /Weiterspielen|Starten/ }).first();
   pruefe('Fortsetzen wird angeboten', await weiter.isVisible());
 
-  await weiter.click();
+  await tippe(weiter);
   await page.waitForTimeout(1500);
 
   const bild3 = await page.evaluate(CANVAS_SIGNATUR);
@@ -209,17 +263,31 @@ try {
 
   // --- Speicherstand nach dem Neuladen ----------------------------------
 
-  await page.locator('.leiste-knopf', { hasText: 'Menü' }).click();
+  await tippe(page.locator('.leiste-knopf', { hasText: 'Menü' }));
   await page.waitForSelector('text=Speicherplätze', { timeout: 10000 });
   const plaetze2 = page.locator('.plaetze').first().locator('.platz');
-  pruefe(
-    'Gespeicherter Platz ist noch da',
-    (await plaetze2.nth(0).getAttribute('data-belegt')) === 'true',
-  );
+
+  // Die Plätze werden asynchron aus der Datenbank nachgeladen. Auf den
+  // Zustand warten statt auf eine feste Zeit — sonst hängt das Ergebnis
+  // daran, wie schnell die Eingabe ankam.
+  const nochBelegt = await plaetze2
+    .nth(0)
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .then(() =>
+      page.waitForFunction(
+        () => document.querySelector('.plaetze .platz')?.getAttribute('data-belegt') === 'true',
+        null,
+        { timeout: 5000 },
+      ),
+    )
+    .then(() => true)
+    .catch(() => false);
+
+  pruefe('Gespeicherter Platz ist noch da', nochBelegt);
 
   // Laden aus dem Speicherplatz
-  await page.locator('.knopf', { hasText: 'Laden' }).first().click();
-  await plaetze2.nth(0).click();
+  await tippe(page.locator('.knopf', { hasText: 'Laden' }));
+  await tippe(plaetze2.nth(0));
   await page.waitForTimeout(1500);
   pruefe('Laden aus dem Speicherplatz löst keinen Fehler aus', true);
 
