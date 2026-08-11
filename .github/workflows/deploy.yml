@@ -35,7 +35,13 @@ jobs:
       - run: npm test
       - run: npm run build
 
+      # enablement schaltet Pages notfalls selbst ein, statt daran zu
+      # scheitern. Ohne das bricht der Schritt ab, solange die Pages-Quelle
+      # im Repository noch nicht auf "GitHub Actions" steht — Bau und Tests
+      # laufen dann zwar durch, veröffentlicht wird aber nichts.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
