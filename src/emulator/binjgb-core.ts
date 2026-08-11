@@ -95,6 +95,9 @@ interface BinjgbModule {
     colorCurve: number,
   ): number;
   _emulator_delete(e: number): void;
+  _joypad_new(): number;
+  _joypad_delete(ptr: number): void;
+  _emulator_set_default_joypad_callback(e: number, joypadBuffer: number): void;
   _emulator_run_until_f64(e: number, ticks: number): number;
   _emulator_get_ticks_f64(e: number): number;
   _get_frame_buffer_ptr(e: number): number;
@@ -170,6 +173,8 @@ export class BinjgbCore implements EmulatorCore {
   #module: BinjgbModule | null = null;
   #emulator = 0;
   #romPtr = 0;
+  /** Puffer des Joypad-Callbacks; ohne ihn erreicht keine Eingabe das Spiel. */
+  #joypadPtr = 0;
   /** Eigene Kopie des ROMs — reset() legt daraus einen frischen Emulator an. */
   #rom: Uint8Array | null = null;
 
@@ -234,6 +239,17 @@ export class BinjgbCore implements EmulatorCore {
       this.#romPtr = 0;
       throw new Error('binjgb hat die Datei nicht als gültiges Game-Boy-ROM angenommen.');
     }
+
+    // Ohne diese Anmeldung bleibt das Spiel taub.
+    //
+    // `set_joyp_*` schreibt nur in eine statische Struktur im WASM-Modul;
+    // in den Emulator gelangt sie erst über `default_joypad_callback`, und
+    // der muss eigens angemeldet werden. In binjgbs Beispiel steckt der
+    // Aufruf mitten im Rewind-Teil — übernimmt man den nicht, drückt man
+    // Knöpfe ins Leere. Genau so war es: Die Anzeige im Gehäuse leuchtete
+    // auf, das Spiel bekam davon nie etwas mit.
+    this.#joypadPtr = module._joypad_new();
+    module._emulator_set_default_joypad_callback(this.#emulator, this.#joypadPtr);
 
     this.#frameBuffer = wasmView(
       module,
@@ -470,6 +486,10 @@ export class BinjgbCore implements EmulatorCore {
     if (this.#emulator) {
       module._emulator_delete(this.#emulator);
       this.#emulator = 0;
+    }
+    if (this.#joypadPtr) {
+      module._joypad_delete(this.#joypadPtr);
+      this.#joypadPtr = 0;
     }
     if (this.#romPtr) {
       module._free(this.#romPtr);

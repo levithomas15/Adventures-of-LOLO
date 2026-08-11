@@ -136,6 +136,56 @@
           !gleich(nachReset.data, e.data),
           'sonst startete das Spiel mitten im Geschehen',
         );
+
+        // ---------------------------------------------------------------
+        // Erreichen Tastendrücke überhaupt den Emulator?
+        //
+        // Genau das war lange kaputt: `set_joyp_*` schreibt nur in eine
+        // statische Struktur im WASM-Modul, und ohne angemeldeten
+        // Joypad-Callback liest sie niemand aus. Das Gehäuse hob die Taste
+        // hervor, das Spiel bekam nie etwas mit. Deshalb wird hier nicht die
+        // Anzeige geprüft, sondern das Bild, das der Emulator erzeugt.
+        //
+        // Das Prüf-ROM schreibt die gedrückten Tasten unmittelbar in die
+        // Hintergrundpalette — Tastendruck heißt also: Bildschirm wechselt.
+        const leeresPad = {
+          UP: false, DOWN: false, LEFT: false, RIGHT: false,
+          A: false, B: false, START: false, SELECT: false,
+        };
+
+        const joypadRom = new Uint8Array(
+          await (await fetch('./generated/joypad.gb')).arrayBuffer(),
+        );
+        await core.loadRom(joypadRom);
+        await core.play();
+        await warte(400);
+
+        const bildschirmfarbe = () => {
+          const canvas = document.getElementById('screen');
+          const daten = canvas.getContext('2d').getImageData(0, 0, 8, 8).data;
+          return `${daten[0]},${daten[1]},${daten[2]}`;
+        };
+
+        const ohneTaste = bildschirmfarbe();
+        core.setJoypad({ ...leeresPad, A: true });
+        await warte(400);
+        const mitTaste = bildschirmfarbe();
+
+        pruefe(
+          'Tastendruck erreicht den Emulator',
+          ohneTaste !== mitTaste,
+          `ohne: ${ohneTaste} · mit A: ${mitTaste}`,
+        );
+
+        core.setJoypad({ ...leeresPad });
+        await warte(400);
+        pruefe(
+          'Loslassen wirkt ebenfalls',
+          bildschirmfarbe() === ohneTaste,
+          'sonst bliebe eine Taste hängen',
+        );
+
+        await core.pause();
       } catch (fehler) {
         pruefe('Durchlauf ohne Ausnahme', false, String(fehler?.stack ?? fehler));
       }

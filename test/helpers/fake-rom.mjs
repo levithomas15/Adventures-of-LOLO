@@ -22,6 +22,49 @@ export const NINTENDO_LOGO = Uint8Array.from([
 export const BGP_ADDRESS = 0xff47;
 
 /**
+ * Ein Test-ROM, dessen Bildschirmfarbe unmittelbar am Joypad hängt.
+ *
+ * Es liest in einer Schleife das Joypad-Register und schreibt die gedrückten
+ * Tasten direkt in die Hintergrundpalette. Ohne Tastendruck ist der Bildschirm
+ * einfarbig; sobald A oder B gehalten wird, wechselt der Ton sichtbar.
+ *
+ * Damit lässt sich prüfen, was lange unbemerkt kaputt war: Eingaben landeten
+ * zwar in der Anzeige des Gehäuses, erreichten den Emulator aber nie, weil
+ * der Joypad-Callback von binjgb nicht angemeldet war. Ein Test, der nur auf
+ * die Knopf-Hervorhebung schaut, hätte das nie bemerkt — dieser schon.
+ */
+export function buildJoypadRom() {
+  const rom = buildFakeRom({ title: 'JOYPAD' });
+
+  // 0x150  3E 91      LD A,$91
+  // 0x152  EA 40 FF   LD ($FF40),A   ; Bildschirm einschalten
+  // 0x155  3E 10      LD A,$10       ; Aktionstasten auswählen   <- Schleife
+  // 0x157  E0 00      LDH ($00),A
+  // 0x159  F0 00      LDH A,($00)    ; zweimal lesen, wie die Hardware es will
+  // 0x15B  F0 00      LDH A,($00)
+  // 0x15D  2F         CPL            ; gedrückt = 1
+  // 0x15E  E6 0F      AND $0F
+  // 0x160  E0 47      LDH ($47),A    ; in die Hintergrundpalette
+  // 0x162  18 F1      JR -15         ; zurück zu 0x155
+  rom.set(
+    [
+      0x3e, 0x91, 0xea, 0x40, 0xff, 0x3e, 0x10, 0xe0, 0x00, 0xf0, 0x00, 0xf0, 0x00, 0x2f, 0xe6,
+      0x0f, 0xe0, 0x47, 0x18, 0xf1,
+    ],
+    0x150,
+  );
+
+  // Titel und Programm haben sich geändert — Prüfsumme neu bilden.
+  let checksum = 0;
+  for (let address = 0x134; address <= 0x14c; address++) {
+    checksum = (checksum - rom[address] - 1) & 0xff;
+  }
+  rom[0x14d] = checksum;
+
+  return rom;
+}
+
+/**
  * Eine NES-Attrappe: nur der iNES-Kopf und Füllbytes, kein lauffähiges
  * Programm. Mehr braucht es nicht — geprüft wird ausschließlich, dass die
  * App sie als Fremdsystem erkennt und das auch sagt, statt bloß "nichts
