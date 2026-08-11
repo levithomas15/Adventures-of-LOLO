@@ -80,6 +80,24 @@ nur vier Richtungen, eine versehentliche Diagonale kostet dort einen Zug.
 Am Rechner: Pfeiltasten oder WASD, `X` = A, `Y`/`Z` = B, Enter = Start,
 Umschalt = Select.
 
+## Bildschirmfarbe
+
+Standard ist das originale DMG-Grün. Unter **Menü → Einstellungen →
+Bildschirmfarbe** gibt es außerdem Pocket-Grau, Light-Blaugrün und
+**Spielfarben**.
+
+Letzteres lohnt sich bei Adventures of Lolo: Das Spiel unterstützt den
+**Super Game Boy** (Flag `0x03` im Header) und bringt eigene Farbpaletten mit
+— Titelbild in Rosa und Türkis statt Grün. Das ist genau das Bild, das die
+Cartridge an einem Super Game Boy erzeugt hätte.
+
+Technisch setzt die App die vier Töne nicht über die Palettenfunktion des
+Emulators, sondern rechnet das fertige Bild um: Helligkeit bestimmen, auf vier
+Stufen runden, Ton einsetzen. Der Grund ist, dass binjgb im SGB-Modus aus
+`SGB.screen_pal` zeichnet und eine gesetzte Schwarzweiß-Palette gar nicht
+ansieht — die Einstellung wäre bei genau den Spielen wirkungslos, bei denen
+sie am ehesten auffällt.
+
 ## Kein Ton?
 
 Auf dem iPhone gilt für Web-Audio der **seitliche Stummschalter** — auch dann,

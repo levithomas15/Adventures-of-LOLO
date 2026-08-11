@@ -37,14 +37,51 @@ const AUDIO_LATENCY_SEC = 0.1;
 const CGB_COLOR_CURVE = 2;
 
 /**
- * Nummern aus binjgbs eingebauter Palettentabelle (84 Stück).
- * Der Kern färbt damit direkt das Bild — echter als ein CSS-Filter.
+ * Die vier Grautöne, die der Game Boy darstellen kann — hier als echte Farben.
+ *
+ * Nicht über binjgbs eingebaute Palettentabelle: Deren 84 Einträge sind die
+ * Farbschemata des Game Boy *Color*, mit denen dieser DMG-Spiele einfärbt.
+ * Sie geben Hintergrund und Sprites unterschiedliche Farben, weshalb das Bild
+ * bunt wird — hübsch, aber eben kein Game Boy. Wer ein grünes Gehäuse mit
+ * grünem Bildschirm erwartet, bekäme Rosa und Türkis.
+ *
+ * `emulator_set_bw_palette_simple` nimmt dagegen vier Farben je Palettentyp
+ * entgegen. Setzt man allen drei Typen dieselben vier Töne, entsteht genau
+ * das Bild eines echten DMG — und die Werte stimmen mit `--lcd-*` in
+ * styles.css überein, sodass Bildschirm und Gehäuse zusammenpassen.
  */
-export const PALETTEN: Record<string, number> = {
-  dmg: 79,
-  pocket: 71,
-  light: 27,
+/** RGBA als u32 in der Reihenfolge 0xAABBGGRR — so liegt es im Canvas-Puffer. */
+function rgba(hex: string): number {
+  const wert = parseInt(hex.slice(1), 16);
+  const r = (wert >> 16) & 0xff;
+  const g = (wert >> 8) & 0xff;
+  const b = wert & 0xff;
+  return ((0xff << 24) | (b << 16) | (g << 8) | r) >>> 0;
+}
+
+/** Je vier Töne von hell nach dunkel. */
+export const PALETTEN: Record<string, readonly [string, string, string, string]> = {
+  // Das originale DMG-Grün.
+  dmg: ['#9bbc0f', '#8bac0f', '#306230', '#0f380f'],
+  // Game Boy Pocket: neutrales Grau.
+  pocket: ['#c4cfa1', '#8b956d', '#4d533c', '#1f1f1f'],
+  // Game Boy Light: kühles Blaugrün.
+  light: ['#92d1c8', '#5aa79c', '#2c6a63', '#0d3b36'],
 };
+
+/**
+ * Sonderfall: die Farben, die das Spiel selbst vorgibt.
+ *
+ * Adventures of Lolo unterstützt den Super Game Boy (Flag 0x03 im Header) und
+ * schickt beim Start eigene Farbpaletten. binjgb setzt diese Paletten dann
+ * über unsere — im Ergebnis erscheint das Titelbild rosa und türkis statt
+ * grün. Das ist keine Fehlfunktion, sondern genau das Bild, das die Cartridge
+ * an einem Super Game Boy erzeugt hätte, und es sieht ausgesprochen gut aus.
+ *
+ * Nur passt es nicht zu einem Gehäuse mit grünem Bildschirm. Deshalb ist es
+ * eine eigene Auswahl statt eine stille Überraschung.
+ */
+export const PALETTE_SPIELFARBEN = 'spiel';
 
 interface BinjgbModule {
   HEAP8: { buffer: ArrayBuffer };
@@ -60,7 +97,6 @@ interface BinjgbModule {
   _emulator_delete(e: number): void;
   _emulator_run_until_f64(e: number, ticks: number): number;
   _emulator_get_ticks_f64(e: number): number;
-  _emulator_set_builtin_palette(e: number, palette: number): void;
   _get_frame_buffer_ptr(e: number): number;
   _get_frame_buffer_size(e: number): number;
   _get_audio_buffer_ptr(e: number): number;
@@ -152,6 +188,8 @@ export class BinjgbCore implements EmulatorCore {
   #audioUnlocked = false;
 
   #paletteId = 'dmg';
+  /** Helligkeit (0…255) → fertiger RGBA-Wert. `null` = Spielfarben unverändert. */
+  #farbtabelle: Uint32Array | null = null;
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
     this.#module = await loadBinjgb();
@@ -359,10 +397,43 @@ export class BinjgbCore implements EmulatorCore {
 
   setPalette(paletteId: string): void {
     this.#paletteId = paletteId;
-    const module = this.#module;
-    if (!module || !this.#emulator) return;
-    module._emulator_set_builtin_palette(this.#emulator, PALETTEN[paletteId] ?? PALETTEN.dmg);
+    this.#wendePaletteAn();
     this.#renderFrame();
+  }
+
+  /**
+   * Baut die Zuordnung Helligkeit → Game-Boy-Ton.
+   *
+   * Warum nicht einfach `emulator_set_bw_palette_simple`? Weil das bei
+   * Spielen mit Super-Game-Boy-Unterstützung wirkungslos bleibt: In diesem
+   * Modus zeichnet binjgb aus `SGB.screen_pal` und sieht `color_to_rgba` gar
+   * nicht an. Adventures of Lolo gehört dazu — das Titelbild kam rosa und
+   * türkis heraus, egal was man einstellte. Ein `force_dmg` gäbe es im Kern
+   * zwar, `emulator_new_simple` reicht es aber nicht durch.
+   *
+   * Also wird das fertige Bild umgesetzt: Helligkeit ausrechnen, auf vier
+   * Stufen runden, den passenden Ton einsetzen. Das ergibt für jedes Spiel
+   * denselben verlässlichen Game-Boy-Look — mit oder ohne SGB.
+   */
+  #baueFarbtabelle(): void {
+    if (this.#paletteId === PALETTE_SPIELFARBEN) {
+      this.#farbtabelle = null;
+      return;
+    }
+
+    // Reihenfolge in PALETTEN ist hell → dunkel, die Helligkeit läuft
+    // andersherum; deshalb von hinten indizieren.
+    const toene = (PALETTEN[this.#paletteId] ?? PALETTEN.dmg).map(rgba);
+    const tabelle = new Uint32Array(256);
+    for (let helligkeit = 0; helligkeit < 256; helligkeit++) {
+      const stufe = helligkeit >> 6; // 0 = dunkel … 3 = hell
+      tabelle[helligkeit] = toene[3 - stufe];
+    }
+    this.#farbtabelle = tabelle;
+  }
+
+  #wendePaletteAn(): void {
+    this.#baueFarbtabelle();
   }
 
   async unlockAudio(): Promise<void> {
@@ -435,6 +506,10 @@ export class BinjgbCore implements EmulatorCore {
     this.#runUntil(runUntil);
     this.#leftoverTicks = (module._emulator_get_ticks_f64(this.#emulator) - runUntil) | 0;
 
+    // Nach dem Rechnen, vor dem Zeichnen: Hat das Spiel per Super Game Boy
+    // eigene Farben gesetzt, werden sie hier wieder überschrieben — sonst
+    // hätte die Einstellung im Menü bei solchen Spielen keine Wirkung.
+    this.#wendePaletteAn();
     this.#renderFrame();
   };
 
@@ -456,7 +531,22 @@ export class BinjgbCore implements EmulatorCore {
     const frameBuffer = this.#frameBuffer;
     if (!context || !imageData || !frameBuffer) return;
 
-    imageData.data.set(frameBuffer);
+    const tabelle = this.#farbtabelle;
+    if (!tabelle) {
+      // Spielfarben: unverändert durchreichen.
+      imageData.data.set(frameBuffer);
+    } else {
+      // 23 040 Pixel je Bild — als 32-Bit-Wörter geschrieben, damit es auch
+      // auf einem älteren iPhone nicht ins Gewicht fällt.
+      const ziel = new Uint32Array(imageData.data.buffer);
+      for (let i = 0, p = 0; i < frameBuffer.length; i += 4, p++) {
+        // Wahrgenommene Helligkeit, ganzzahlig (entspricht 0,299/0,587/0,114).
+        const helligkeit =
+          (frameBuffer[i] * 77 + frameBuffer[i + 1] * 150 + frameBuffer[i + 2] * 29) >> 8;
+        ziel[p] = tabelle[helligkeit];
+      }
+    }
+
     context.putImageData(imageData, 0, 0);
   }
 

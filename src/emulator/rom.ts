@@ -145,15 +145,36 @@ export function parseRomHeader(rom: Uint8Array): RomHeader {
 }
 
 /**
+ * So viele Logo-Bytes müssen stimmen, damit eine Datei als Game-Boy-ROM gilt.
+ *
+ * Nicht alle 48, sondern 24 — dieselbe Schwelle, die auch das Boot-ROM des
+ * Game Boy Color anlegt. Nur das ältere DMG-Boot-ROM vergleicht das Logo
+ * vollständig.
+ *
+ * Der Anlass war eine echte Datei: 256 KB, MBC1, Header-Prüfsumme korrekt,
+ * im Emulator einwandfrei spielbar — aber die letzten 7 der 48 Logo-Bytes
+ * wichen ab. Die strenge Prüfung hätte sie abgewiesen, obwohl binjgb sie
+ * problemlos startet (es führt gar kein Boot-ROM aus, sondern beginnt direkt
+ * bei 0x100). Die Schleuse war strenger als der Emulator dahinter.
+ */
+const LOGO_PRUEFUMFANG = 24;
+
+/**
  * Schnelltest ohne Ausnahmen — dient dem Archiv-Import dazu, unter mehreren
  * Dateien die eine herauszufischen, die wirklich ein ROM ist.
+ *
+ * Bewusst nachsichtig beim Logo (siehe oben), aber nicht beliebig: Größe und
+ * Cartridge-Typ müssen zusätzlich plausibel sein, sonst rutschte in einem
+ * Archiv irgendeine Binärdatei durch.
  */
 export function looksLikeGameBoyRom(data: Uint8Array): boolean {
   if (data.length < MIN_ROM_SIZE) return false;
-  for (let i = 0; i < NINTENDO_LOGO.length; i++) {
+
+  for (let i = 0; i < LOGO_PRUEFUMFANG; i++) {
     if (data[LOGO_OFFSET + i] !== NINTENDO_LOGO[i]) return false;
   }
-  return true;
+
+  return CARTRIDGE_TYPE_NAMES[data[CARTRIDGE_TYPE_OFFSET]] !== undefined;
 }
 
 /**

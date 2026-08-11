@@ -46,9 +46,43 @@ test('ohne Nintendo-Logo gilt die Datei nicht als ROM', () => {
   const rom = buildFakeRom();
   assert.equal(looksLikeGameBoyRom(rom), true);
 
+  // Der Anfang des Logos ist die harte Grenze — hier wird abgewiesen.
   rom[0x104] = 0x00;
   assert.equal(looksLikeGameBoyRom(rom), false);
   assert.equal(parseRomHeader(rom).logoValid, false);
+});
+
+test('ein abweichendes Logo-Ende wird angenommen, aber gemeldet', () => {
+  // Nachgebaut aus einer echten Datei: 256 KB, MBC1, Prüfsumme korrekt, im
+  // Emulator spielbar — nur die letzten 7 der 48 Logo-Bytes wichen ab.
+  // Die strenge Prüfung hätte sie abgewiesen, obwohl binjgb sie startet.
+  const rom = buildFakeRom();
+  for (let i = 41; i < 48; i++) rom[0x104 + i] = 0x5a;
+
+  assert.equal(
+    looksLikeGameBoyRom(rom),
+    true,
+    'die Schleuse darf nicht strenger sein als der Emulator dahinter',
+  );
+  assert.equal(
+    parseRomHeader(rom).logoValid,
+    false,
+    'die Abweichung muss trotzdem sichtbar bleiben',
+  );
+});
+
+test('eine Binärdatei mit zufälligem Inhalt rutscht nicht durch', () => {
+  // Nachsichtig beim Logo heißt nicht beliebig: Ohne gültigen Cartridge-Typ
+  // und ohne Logo-Anfang bleibt es draußen.
+  const muell = new Uint8Array(0x8000);
+  muell.fill(0xa5);
+  assert.equal(looksLikeGameBoyRom(muell), false);
+});
+
+test('unbekannter Cartridge-Typ wird abgewiesen', () => {
+  const rom = buildFakeRom();
+  rom[0x147] = 0x77; // gibt es nicht
+  assert.equal(looksLikeGameBoyRom(rom), false);
 });
 
 test('zu kleine Dateien werden abgewiesen, nicht halb gelesen', () => {

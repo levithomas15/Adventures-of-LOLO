@@ -122,7 +122,12 @@ export function App() {
       await session.play();
 
       if (!rom.header.logoValid) {
-        zeige('Achtung: Der ROM-Header wirkt beschädigt. Läuft es nicht, ist der Dump unvollständig.', 'fehler');
+        // Kein Grund zur Sorge, aber erwähnenswert: Der Emulator startet
+        // ohne Boot-ROM direkt bei 0x100, das Logo ist ihm also gleichgültig.
+        // Auf einem echten Game Boy bliebe der Bildschirm dagegen leer.
+        zeige(
+          `${rom.title} geladen. Das Nintendo-Logo im Header weicht ab — im Emulator egal, auf echter Hardware startete die Cartridge nicht.`,
+        );
       } else {
         zeige(`${rom.title} geladen.`);
       }

@@ -33,9 +33,11 @@
 }
 
 /* Alternative Bildschirmpaletten. */
+/* Die Werte müssen zu PALETTEN in emulator/binjgb-core.ts passen — sonst
+   hat der Bildschirmrand eine andere Grundfarbe als das Bild darin. */
 [data-palette='pocket'] {
   --lcd-0: #c4cfa1;
-  --lcd-3: #1a1c17;
+  --lcd-3: #1f1f1f;
 }
 [data-palette='light'] {
   --lcd-0: #92d1c8;

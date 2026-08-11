@@ -231,8 +231,17 @@ export function PauseMenu(props: Props) {
             <option value="dmg">Grün (Original)</option>
             <option value="pocket">Grau (Pocket)</option>
             <option value="light">Blaugrün (Light)</option>
+            <option value="spiel">Spielfarben (Super Game Boy)</option>
           </select>
         </label>
+
+        {settings.paletteId === 'spiel' ? (
+          <div class="hinweis">
+            Manche Spiele — Adventures of Lolo gehört dazu — bringen eigene
+            Farben für den Super Game Boy mit. Diese Einstellung zeigt sie,
+            statt sie durch die Game-Boy-Töne zu ersetzen.
+          </div>
+        ) : null}
 
         <div class="feld">
           Ton
