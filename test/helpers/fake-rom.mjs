@@ -65,6 +65,43 @@ export function buildJoypadRom() {
 }
 
 /**
+ * Ein ROM, das nach kurzer Zeit absichtlich in einen ungültigen Befehl läuft.
+ *
+ * Bildet den Fall nach, der die App im Spiel komplett einfrieren ließ: Der
+ * Emulator meldete ein Ereignis, das die Schleife nicht behandelte, brach ab,
+ * ohne das Zeitziel zu erreichen — und der Rückstand wurde in die nächste
+ * Runde übernommen. Das Ziel wuchs mit jedem Bild, bis ein einzelner Frame
+ * Millionen Zyklen am Stück abarbeiten sollte und der Hauptthread stand.
+ *
+ * Ein Test damit hängt sich auf, wenn der Fehler zurückkehrt — genau das
+ * soll er.
+ */
+export function buildInvalidOpcodeRom() {
+  const rom = buildFakeRom({ title: 'BADOP' });
+
+  // 0x150  3E 91        LD A,$91
+  // 0x152  EA 40 FF     LD ($FF40),A     ; Bildschirm an
+  // 0x155  01 00 40     LD BC,$4000      ; rund zwei Bilder Vorlauf
+  // 0x158  0B           DEC BC           <- Schleife
+  // 0x159  78           LD A,B
+  // 0x15A  B1           OR C
+  // 0x15B  20 FB        JR NZ,-5
+  // 0x15D  DD           ungültiger Befehl
+  rom.set(
+    [0x3e, 0x91, 0xea, 0x40, 0xff, 0x01, 0x00, 0x40, 0x0b, 0x78, 0xb1, 0x20, 0xfb, 0xdd],
+    0x150,
+  );
+
+  let checksum = 0;
+  for (let address = 0x134; address <= 0x14c; address++) {
+    checksum = (checksum - rom[address] - 1) & 0xff;
+  }
+  rom[0x14d] = checksum;
+
+  return rom;
+}
+
+/**
  * Eine NES-Attrappe: nur der iNES-Kopf und Füllbytes, kein lauffähiges
  * Programm. Mehr braucht es nicht — geprüft wird ausschließlich, dass die
  * App sie als Fremdsystem erkennt und das auch sagt, statt bloß "nichts

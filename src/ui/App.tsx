@@ -54,6 +54,15 @@ export function App() {
   }, []);
 
   useEffect(() => session.subscribe(setZustand), [session]);
+
+  // Hält der Emulator von selbst an, muss das sichtbar werden — ein stumm
+  // stehendes Bild lässt den Spieler im Dunkeln.
+  useEffect(() => {
+    session.onProblem = (meldung) => zeige(meldung, 'fehler');
+    return () => {
+      session.onProblem = null;
+    };
+  }, [session, zeige]);
   useEffect(() => attachKeyboard(controller), [controller]);
 
   // ---------------------------------------------------------------- Start

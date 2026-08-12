@@ -128,6 +128,7 @@
         await core.pause();
         pruefe('Pause hält den Emulator an', !core.isRunning());
 
+
         // Neustart muss den Ausgangszustand herstellen, nicht den letzten.
         await core.reset();
         const nachReset = await core.snapshot();
@@ -186,6 +187,47 @@
         );
 
         await core.pause();
+        // ---------------------------------------------------------------
+        // Ungültiger Befehl: anhalten und melden, nicht einfrieren.
+        //
+        // So sah der Fehler im Spiel aus: Der Emulator meldete ein Ereignis,
+        // das die Schleife nicht behandelte, brach ab, ohne das Zeitziel zu
+        // erreichen — und der Rückstand ging in die nächste Runde. Das Ziel
+        // wuchs Bild für Bild, bis ein einzelner Frame Millionen Zyklen am
+        // Stück abarbeiten sollte. Die ganze Seite stand still.
+        //
+        // Kehrt das zurück, bleibt dieser Durchlauf hängen und läuft in die
+        // Zeitüberschreitung — auch das ist ein aussagekräftiges Ergebnis.
+        // Wichtig: derselbe Kern, keine zweite Instanz. binjgbs Wrapper hält
+        // den Emulator in einer globalen Variable (`static Emulator* e`), die
+        // der Joypad-Callback mitbenutzt. Eine zweite Instanz überschreibt
+        // sie, und nach dem Freigeben greift die erste ins Leere — genau
+        // dieser Test hat sich daran zuerst selbst zerlegt.
+        let gemeldet = null;
+        core.onProblem = (m) => (gemeldet = m);
+        await core.loadRom(
+          new Uint8Array(await (await fetch('./generated/badop.gb')).arrayBuffer()),
+        );
+        await core.play();
+        await warte(1200);
+
+        pruefe(
+          'Ungültiger Befehl wird gemeldet',
+          typeof gemeldet === 'string' && /ungültigen Befehl/.test(gemeldet),
+          gemeldet ? gemeldet.slice(0, 70) : 'keine Meldung',
+        );
+        pruefe('Emulator hält danach an', !core.isRunning(), 'statt weiterzudrehen');
+
+        // Der entscheidende Punkt: Die Seite muss danach noch reagieren.
+        const vorher = performance.now();
+        await warte(300);
+        const verzoegerung = performance.now() - vorher - 300;
+        pruefe(
+          'Seite bleibt bedienbar',
+          verzoegerung < 500,
+          `Verzögerung ${Math.round(verzoegerung)} ms — bei aufgeschaukeltem Rückstand wären es Sekunden`,
+        );
+
       } catch (fehler) {
         pruefe('Durchlauf ohne Ausnahme', false, String(fehler?.stack ?? fehler));
       }

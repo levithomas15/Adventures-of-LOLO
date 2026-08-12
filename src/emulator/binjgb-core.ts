@@ -27,12 +27,27 @@ export const BINJGB_CORE_NAME = 'binjgb-1';
 const EVENT_NEW_FRAME = 1;
 const EVENT_AUDIO_BUFFER_FULL = 2;
 const EVENT_UNTIL_TICKS = 4;
+const EVENT_BREAKPOINT = 8;
+const EVENT_INVALID_OPCODE = 16;
+
+/**
+ * Obergrenze für Durchläufe je Bild.
+ *
+ * Ein Bild braucht normalerweise eine Handvoll Durchläufe. Diese Schranke
+ * greift nur, wenn etwas grundlegend schiefgeht — und sorgt dafür, dass ein
+ * einzelnes Bild niemals den Hauptthread festhält. Der Emulator rechnet hier
+ * ohne Worker; eine Endlosschleife friert die ganze Seite ein, Menü und
+ * Knöpfe inbegriffen.
+ */
+const MAX_DURCHLAEUFE_JE_BILD = 512;
 
 const CPU_TICKS_PER_SECOND = 4194304;
 /** Höchstens fünf Bilder pro Durchlauf nachholen. */
 const MAX_UPDATE_SEC = 5 / 60;
 const AUDIO_FRAMES = 4096;
 const AUDIO_LATENCY_SEC = 0.1;
+/** Weiter als so darf der eingeplante Ton der Echtzeit nicht vorauseilen. */
+const AUDIO_MAX_VORLAUF_SEC = 0.5;
 /** Farbkurve für GBC-Titel: 2 entspricht Gambatte. */
 const CGB_COLOR_CURVE = 2;
 
@@ -169,6 +184,12 @@ function wasmView(module: BinjgbModule, ptr: number, size: number): Uint8Array {
 
 export class BinjgbCore implements EmulatorCore {
   readonly name = BINJGB_CORE_NAME;
+
+  /**
+   * Wird gerufen, wenn der Emulator anhalten musste. Ohne diesen Weg nach
+   * oben stünde das Bild einfach still, ohne dass jemand erführe, warum.
+   */
+  onProblem: ((meldung: string) => void) | null = null;
 
   #module: BinjgbModule | null = null;
   #emulator = 0;
@@ -523,8 +544,18 @@ export class BinjgbCore implements EmulatorCore {
     const deltaTicks = Math.min(deltaSec, MAX_UPDATE_SEC) * CPU_TICKS_PER_SECOND;
     const runUntil = module._emulator_get_ticks_f64(this.#emulator) + deltaTicks - this.#leftoverTicks;
 
-    this.#runUntil(runUntil);
-    this.#leftoverTicks = (module._emulator_get_ticks_f64(this.#emulator) - runUntil) | 0;
+    const zielErreicht = this.#runUntil(runUntil);
+
+    // Nur ein *Überschuss* darf übernommen werden, niemals ein Rückstand.
+    // Ein negativer Wert würde oben abgezogen, das Ziel also vergrößern —
+    // und sich Bild für Bild aufschaukeln, bis der Hauptthread steht.
+    // Zusätzlich gedeckelt, damit ein einzelner Ausreißer folgenlos bleibt.
+    if (zielErreicht) {
+      const ueberschuss = module._emulator_get_ticks_f64(this.#emulator) - runUntil;
+      this.#leftoverTicks = Math.min(Math.max(ueberschuss, 0), CPU_TICKS_PER_SECOND / 60) | 0;
+    } else {
+      this.#leftoverTicks = 0;
+    }
 
     // Nach dem Rechnen, vor dem Zeichnen: Hat das Spiel per Super Game Boy
     // eigene Farben gesetzt, werden sie hier wieder überschrieben — sonst
@@ -533,16 +564,50 @@ export class BinjgbCore implements EmulatorCore {
     this.#renderFrame();
   };
 
-  #runUntil(ticks: number): void {
+  /**
+   * Rechnet bis zum Zielzeitpunkt. Gibt zurück, ob er erreicht wurde.
+   *
+   * Der Rückgabewert ist wichtiger, als er aussieht: Wird das Ziel *nicht*
+   * erreicht, darf der Rückstand nicht in die nächste Runde übernommen
+   * werden — sonst wächst das Ziel mit jedem Bild weiter, und irgendwann
+   * soll ein einzelnes Bild Millionen Zyklen am Stück abarbeiten. Genau so
+   * fror die Seite mitten im Spiel komplett ein.
+   */
+  #runUntil(ticks: number): boolean {
     const module = this.#module;
-    if (!module || !this.#emulator) return;
+    if (!module || !this.#emulator) return false;
 
-    for (;;) {
+    for (let durchlauf = 0; durchlauf < MAX_DURCHLAEUFE_JE_BILD; durchlauf++) {
       const event = module._emulator_run_until_f64(this.#emulator, ticks);
+
       if (event & EVENT_AUDIO_BUFFER_FULL) this.#pushAudio();
-      if (event & EVENT_UNTIL_TICKS) break;
-      if (!(event & (EVENT_NEW_FRAME | EVENT_AUDIO_BUFFER_FULL))) break;
+      if (event & EVENT_UNTIL_TICKS) return true;
+
+      // Ein ungültiger Befehl bedeutet, dass der Prozessor in Daten gelaufen
+      // ist — meist ein unvollständiger Abzug. Weiterrechnen bringt nichts
+      // und wäre nur eine stumme Endlosschleife.
+      if (event & (EVENT_INVALID_OPCODE | EVENT_BREAKPOINT)) {
+        this.#melde(
+          event & EVENT_INVALID_OPCODE
+            ? 'Das Spiel ist auf einen ungültigen Befehl gelaufen und wurde angehalten. Lade einen Speicherstand, um weiterzuspielen. Tritt das immer an derselben Stelle auf, ist der ROM-Abzug vermutlich unvollständig.'
+            : 'Der Emulator ist an einem Haltepunkt stehengeblieben und wurde angehalten.',
+        );
+        return false;
+      }
+
+      // Kein bekanntes Ereignis: nicht weiterdrehen, sonst droht Stillstand.
+      if (!(event & (EVENT_NEW_FRAME | EVENT_AUDIO_BUFFER_FULL))) return false;
     }
+
+    // Obergrenze erreicht. Kein Fehler, aber auch kein erreichtes Ziel —
+    // der Rückstand wird verworfen statt aufgeschaukelt.
+    return false;
+  }
+
+  /** Meldet ein Problem nach oben und hält den Emulator an. */
+  #melde(meldung: string): void {
+    void this.pause();
+    this.onProblem?.(meldung);
   }
 
   #renderFrame(): void {
@@ -581,6 +646,17 @@ export class BinjgbCore implements EmulatorCore {
     if (!this.#audioStartSec || this.#audioStartSec < nowSec) {
       this.#audioStartSec = frueheste;
     }
+
+    // Obergrenze für den Vorlauf.
+    //
+    // Rechnet der Emulator auch nur geringfügig schneller als die Echtzeit —
+    // was beim Aufholen nach jedem Ruckler passiert —, wandert der
+    // Startzeitpunkt immer weiter in die Zukunft. Ohne Schranke wachsen die
+    // eingeplanten Puffer unbegrenzt: je 32 KB, mehrmals pro Sekunde, über
+    // Minuten hinweg. Auf einem iPhone endet das in Speicherdruck und einer
+    // Seite, die irgendwann steht. Liegt der Ton zu weit vorn, wird dieser
+    // Puffer verworfen statt zusätzlich eingeplant.
+    if (this.#audioStartSec - nowSec > AUDIO_MAX_VORLAUF_SEC) return;
 
     const audio = context.createBuffer(2, AUDIO_FRAMES, context.sampleRate);
     const links = audio.getChannelData(0);

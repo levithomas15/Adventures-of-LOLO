@@ -10,13 +10,20 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildFakeNesRom, buildFakeRom, buildJoypadRom } from './helpers/fake-rom.mjs';
+import {
+  buildFakeNesRom,
+  buildFakeRom,
+  buildInvalidOpcodeRom,
+  buildJoypadRom,
+} from './helpers/fake-rom.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const FIXTURE_DIR = join(here, 'fixtures', 'generated');
 export const ROM_PATH = join(FIXTURE_DIR, 'testrom.gb');
 /** ROM, dessen Bildschirmfarbe am Joypad hängt — prüft, ob Eingaben ankommen. */
 export const JOYPAD_ROM_PATH = join(FIXTURE_DIR, 'joypad.gb');
+/** ROM, das absichtlich in einen ungültigen Befehl läuft. */
+export const BADOP_ROM_PATH = join(FIXTURE_DIR, 'badop.gb');
 export const ARCHIVE_PATH = join(FIXTURE_DIR, 'testrom.7z');
 /** Archiv mit ausschließlich NES-ROMs — der Fall aus der Praxis. */
 export const NES_ARCHIVE_PATH = join(FIXTURE_DIR, 'nur-nes.7z');
@@ -45,6 +52,7 @@ export function makeFixtures() {
   const rom = buildFakeRom({ title: 'TESTROM' });
   writeFileSync(ROM_PATH, rom);
   writeFileSync(JOYPAD_ROM_PATH, buildJoypadRom());
+  writeFileSync(BADOP_ROM_PATH, buildInvalidOpcodeRom());
 
   // Zusätzlich eine Textdatei ins Archiv, damit der Import beweisen muss,
   // dass er anhand des Headers filtert und nicht einfach die erste Datei nimmt.
@@ -81,6 +89,7 @@ export function makeFixtures() {
   return {
     romPath: ROM_PATH,
     joypadRomPath: JOYPAD_ROM_PATH,
+    badopRomPath: BADOP_ROM_PATH,
     archivePath: ARCHIVE_PATH,
     nesArchivePath: NES_ARCHIVE_PATH,
     mixedArchivePath: MIXED_ARCHIVE_PATH,

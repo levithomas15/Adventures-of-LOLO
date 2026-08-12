@@ -46,6 +46,13 @@ export class GameSession {
   #listeners = new Set<Listener>();
   #lifecycleBound = false;
 
+  /**
+   * Wird gerufen, wenn der Emulator von selbst anhalten musste — etwa nach
+   * einem ungültigen Befehl. Die UI zeigt die Meldung an, statt den Nutzer
+   * vor einem stehenden Bild raten zu lassen.
+   */
+  onProblem: ((meldung: string) => void) | null = null;
+
   // ------------------------------------------------------------ Abonnement
 
   subscribe(listener: Listener): () => void {
@@ -79,6 +86,11 @@ export class GameSession {
 
   async attach(canvas: HTMLCanvasElement): Promise<void> {
     this.#canvas = canvas;
+    this.#core.onProblem = (meldung) => {
+      this.#running = false;
+      this.#emit();
+      this.onProblem?.(meldung);
+    };
     await this.#core.init(canvas);
     this.#bindLifecycle();
   }
