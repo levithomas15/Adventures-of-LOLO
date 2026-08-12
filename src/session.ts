@@ -43,6 +43,8 @@ export class GameSession {
   #lastAutoSaveAt: number | null = null;
 
   #autosaveTimer: ReturnType<typeof setInterval> | null = null;
+  /** Aufeinanderfolgende Fehlschläge beim automatischen Speichern. */
+  #autoSaveFehler = 0;
   #listeners = new Set<Listener>();
   #lifecycleBound = false;
 
@@ -213,10 +215,21 @@ export class GameSession {
         this.playtimeMs,
       );
       this.#lastAutoSaveAt = save.createdAt;
+      this.#autoSaveFehler = 0;
       this.#emit();
       return save;
-    } catch {
-      // Ein fehlgeschlagener Auto-Stand darf das Spiel nicht anhalten.
+    } catch (fehler) {
+      // Ein einzelner Fehlschlag darf das Spiel nicht anhalten — aber
+      // stillschweigend weiterlaufen darf er auch nicht. Wer stundenlang
+      // spielt und erst am Ende merkt, dass nichts gesichert wurde, hat
+      // alles verloren. Deshalb nach mehreren Fehlversuchen Bescheid geben.
+      if (++this.#autoSaveFehler === 3) {
+        this.onProblem?.(
+          `Automatisches Speichern schlägt fehl: ${
+            fehler instanceof Error ? fehler.message : String(fehler)
+          } — sichere von Hand oder lade die App neu.`,
+        );
+      }
       return null;
     }
   }

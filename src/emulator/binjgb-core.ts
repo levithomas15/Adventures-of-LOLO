@@ -48,6 +48,32 @@ const AUDIO_FRAMES = 4096;
 const AUDIO_LATENCY_SEC = 0.1;
 /** Weiter als so darf der eingeplante Ton der Echtzeit nicht vorauseilen. */
 const AUDIO_MAX_VORLAUF_SEC = 0.5;
+
+/**
+ * Nach so vielen Tastenwechseln wird der Joypad-Puffer erneuert.
+ *
+ * Der Puffer gehört zum Joypad-Callback, ohne den keine Eingabe im Emulator
+ * ankommt. Er schreibt jeden Tastenwechsel mit — für die Rückspul-Funktion,
+ * die diese App nicht benutzt — und gibt dabei nie etwas frei:
+ *
+ *     static JoypadState* alloc_joypad_state(JoypadBuffer* buffer) {
+ *       if (tail->size >= tail->capacity) { ...alloc_joypad_chunk(...) }
+ *
+ * Das wäre halb so wild, wenn der Speicher nachwachsen könnte. Kann er aber
+ * nicht: binjgb ist ohne ALLOW_MEMORY_GROWTH gebaut, der Heap bleibt fest
+ * bei 16 MB.
+ *
+ * Gemessen: Ein Abschnitt fasst rund 4096 Wechsel (64 KB). Bei
+ * üblichem Spiel — ein bis zwei Tastenwechsel je Sekunde — dauert es
+ * Stunden, bis das ins Gewicht fällt; 3000 Wechsel wuchsen im Versuch
+ * überhaupt nicht messbar. Der Puffer ist damit *nicht* die Ursache des
+ * gemeldeten Fehlers, aber über sehr lange Sitzungen wächst er unbegrenzt.
+ *
+ * Die Schwelle liegt deshalb weit über einer Abschnittsgröße: So bleibt der
+ * Verbrauch gedeckelt, ohne dass ständig neue Abschnitte angelegt werden.
+ * Zu häufiges Erneuern kostete im Versuch mehr Speicher, als es sparte.
+ */
+const JOYPAD_PUFFER_ERNEUERN_NACH = 50_000;
 /** Farbkurve für GBC-Titel: 2 entspricht Gambatte. */
 const CGB_COLOR_CURVE = 2;
 
@@ -177,6 +203,19 @@ function loadBinjgb(): Promise<BinjgbModule> {
   return modulePromise;
 }
 
+function gleicherJoypad(a: JoypadState, b: JoypadState): boolean {
+  return (
+    a.UP === b.UP &&
+    a.DOWN === b.DOWN &&
+    a.LEFT === b.LEFT &&
+    a.RIGHT === b.RIGHT &&
+    a.A === b.A &&
+    a.B === b.B &&
+    a.START === b.START &&
+    a.SELECT === b.SELECT
+  );
+}
+
 /** Sicht auf einen Ausschnitt des WASM-Speichers. Nur kurzlebig verwenden. */
 function wasmView(module: BinjgbModule, ptr: number, size: number): Uint8Array {
   return new Uint8Array(module.HEAP8.buffer, ptr, size);
@@ -196,6 +235,9 @@ export class BinjgbCore implements EmulatorCore {
   #romPtr = 0;
   /** Puffer des Joypad-Callbacks; ohne ihn erreicht keine Eingabe das Spiel. */
   #joypadPtr = 0;
+  /** Zähler bis zur nächsten Erneuerung des Joypad-Puffers. */
+  #joypadWechsel = 0;
+  #letzterJoypad: JoypadState | null = null;
   /** Eigene Kopie des ROMs — reset() legt daraus einen frischen Emulator an. */
   #rom: Uint8Array | null = null;
 
@@ -421,6 +463,14 @@ export class BinjgbCore implements EmulatorCore {
     const module = this.#module;
     if (!module || !this.#emulator) return;
 
+    // Nur echte Wechsel zählen — der Puffer legt auch nur dann etwas an.
+    if (this.#letzterJoypad === null || !gleicherJoypad(this.#letzterJoypad, state)) {
+      this.#letzterJoypad = { ...state };
+      if (++this.#joypadWechsel >= JOYPAD_PUFFER_ERNEUERN_NACH) {
+        this.#erneuereJoypadPuffer();
+      }
+    }
+
     const e = this.#emulator;
     module._set_joyp_up(e, state.UP);
     module._set_joyp_down(e, state.DOWN);
@@ -602,6 +652,25 @@ export class BinjgbCore implements EmulatorCore {
     // Obergrenze erreicht. Kein Fehler, aber auch kein erreichtes Ziel —
     // der Rückstand wird verworfen statt aufgeschaukelt.
     return false;
+  }
+
+  /**
+   * Legt den Joypad-Puffer neu an und gibt den alten frei.
+   *
+   * Reihenfolge ist wichtig: erst den neuen Puffer anmelden, dann den alten
+   * löschen. Andersherum zeigte der Callback für einen Moment auf
+   * freigegebenen Speicher.
+   */
+  #erneuereJoypadPuffer(): void {
+    const module = this.#module;
+    if (!module || !this.#emulator) return;
+
+    const alt = this.#joypadPtr;
+    this.#joypadPtr = module._joypad_new();
+    module._emulator_set_default_joypad_callback(this.#emulator, this.#joypadPtr);
+    if (alt) module._joypad_delete(alt);
+
+    this.#joypadWechsel = 0;
   }
 
   /** Meldet ein Problem nach oben und hält den Emulator an. */
