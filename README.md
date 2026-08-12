@@ -66,6 +66,21 @@ selbst sichern. Deshalb steht das Speichern hier im Mittelpunkt:
 Die App erkennt am Cartridge-Header, ob ein Spiel selbst speichern kann, und
 weist im Menü darauf hin, wenn nicht.
 
+## Passwörter
+
+Lolo speichert nicht selbst — es nennt dir am Ende eines Abschnitts ein
+Passwort. Unter **Menü → Passwörter** hältst du sie fest, mit Notiz dazu
+(„Level 12"). Die vier Zeichen, die das Spiel zeigt und keine Tastatur hat —
+♥ △ ◆ ✚ — gibt es dort als Schaltflächen.
+
+Warum zusätzlich zu den Speicherplätzen: Ein Passwort gilt auf jedem Gerät
+und in jeder Fassung des Spiels, auch ohne diese App. Notierte Passwörter
+gehen in die Sicherung mit ein.
+
+**Es gibt kein Universal-Passwort**, das alle Level öffnet. Jeder Abschnitt
+hat sein eigenes. Vollständige Listen findest du bei GameFAQs oder
+StrategyWiki — dort steht auch, wofür die Sonderzeichen stehen.
+
 ## Steuerung
 
 Das Steuerkreuz ist **eine** Fläche; die Richtung ergibt sich aus der Lage

@@ -64,6 +64,22 @@ export const DEFAULT_SETTINGS: Settings = {
   scanlines: false,
 };
 
+/**
+ * Ein notiertes Spiel-Passwort.
+ *
+ * Lolo speichert nicht selbst, sondern gibt am Ende eines Abschnitts ein
+ * Passwort aus — im Original schrieb man es auf Papier. Hier steht es
+ * neben den Speicherständen, wo es hingehört.
+ */
+export interface StoredPassword {
+  id: string;
+  romId: string;
+  /** Frei wählbar, etwa "Level 12" oder "nach dem Tutorial". */
+  label: string;
+  code: string;
+  createdAt: number;
+}
+
 interface LoloDB extends DBSchema {
   roms: {
     key: string;
@@ -78,10 +94,15 @@ interface LoloDB extends DBSchema {
     key: string;
     value: unknown;
   };
+  passwoerter: {
+    key: string;
+    value: StoredPassword;
+    indexes: { byRom: string };
+  };
 }
 
 const DB_NAME = 'adventures-of-lolo';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<LoloDB>> | null = null;
 
@@ -98,6 +119,11 @@ export function getDb(): Promise<IDBPDatabase<LoloDB>> {
         }
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings');
+        }
+        // Version 2: Notizblock für die Spiel-Passwörter.
+        if (!db.objectStoreNames.contains('passwoerter')) {
+          const passwoerter = db.createObjectStore('passwoerter', { keyPath: 'id' });
+          passwoerter.createIndex('byRom', 'romId');
         }
       },
     });

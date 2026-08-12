@@ -1,4 +1,10 @@
-import { getDb, readSettings, type StoredRom, type StoredSave } from './db';
+import {
+  getDb,
+  readSettings,
+  type StoredPassword,
+  type StoredRom,
+  type StoredSave,
+} from './db';
 
 /**
  * Sicherung aller Daten in eine Datei — und zurück.
@@ -11,7 +17,8 @@ import { getDb, readSettings, type StoredRom, type StoredSave } from './db';
  */
 
 const BACKUP_FORMAT = 'adventures-of-lolo-backup';
-const BACKUP_VERSION = 1;
+/** 2 seit dem Passwort-Notizblock. Ältere Dateien lassen sich weiterhin einlesen. */
+const BACKUP_VERSION = 2;
 
 /** Base64 in Blöcken — `fromCharCode(...millionen)` sprengt den Stack. */
 function toBase64(bytes: Uint8Array): string {
@@ -68,14 +75,17 @@ export interface BackupFile {
   roms: unknown[];
   saves: unknown[];
   settings: unknown;
+  /** Seit Version 2. Bei älteren Sicherungen schlicht nicht vorhanden. */
+  passwoerter?: unknown[];
 }
 
 export async function exportBackup(): Promise<Blob> {
   const db = await getDb();
-  const [roms, saves, settings] = await Promise.all([
+  const [roms, saves, settings, passwoerter] = await Promise.all([
     db.getAll('roms'),
     db.getAll('saves'),
     readSettings(),
+    db.getAll('passwoerter'),
   ]);
 
   const backup: BackupFile = {
@@ -85,6 +95,9 @@ export async function exportBackup(): Promise<Blob> {
     roms: roms.map(encode),
     saves: saves.map(encode),
     settings: encode(settings),
+    // Notierte Passwörter gehören dazu — sie sind der Teil, der auch ohne
+    // diese App noch etwas wert ist.
+    passwoerter: passwoerter.map(encode),
   };
 
   return new Blob([JSON.stringify(backup)], { type: 'application/json' });
@@ -98,6 +111,7 @@ export function backupFileName(): string {
 export interface ImportResult {
   roms: number;
   saves: number;
+  passwoerter: number;
 }
 
 /**
@@ -124,14 +138,17 @@ export async function importBackup(file: File): Promise<ImportResult> {
 
   const roms = (parsed.roms ?? []).map(decode) as StoredRom[];
   const saves = (parsed.saves ?? []).map(decode) as StoredSave[];
+  // Fehlt in Sicherungen der Version 1 — dann bleibt die Liste eben leer.
+  const passwoerter = (parsed.passwoerter ?? []).map(decode) as StoredPassword[];
 
   const db = await getDb();
-  const tx = db.transaction(['roms', 'saves'], 'readwrite');
+  const tx = db.transaction(['roms', 'saves', 'passwoerter'], 'readwrite');
   await Promise.all([
     ...roms.map((rom) => tx.objectStore('roms').put(rom)),
     ...saves.map((save) => tx.objectStore('saves').put(save)),
+    ...passwoerter.map((eintrag) => tx.objectStore('passwoerter').put(eintrag)),
   ]);
   await tx.done;
 
-  return { roms: roms.length, saves: saves.length };
+  return { roms: roms.length, saves: saves.length, passwoerter: passwoerter.length };
 }

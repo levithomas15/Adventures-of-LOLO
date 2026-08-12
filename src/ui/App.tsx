@@ -155,7 +155,9 @@ export function App() {
         setFortsetzbar(Boolean(await latestAutoSave(roms[0].id)));
       }
       setZeigeImport(false);
-      zeige(`Sicherung eingespielt: ${ergebnis.roms} ROM(s), ${ergebnis.saves} Stände.`);
+      zeige(
+        `Sicherung eingespielt: ${ergebnis.roms} ROM(s), ${ergebnis.saves} Stände, ${ergebnis.passwoerter} Passwörter.`,
+      );
     },
     [session, zeige],
   );

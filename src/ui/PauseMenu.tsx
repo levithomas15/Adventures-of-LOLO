@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'preact/hooks';
 import { MANUAL_SLOT_COUNT, type Settings, type StoredRom, type StoredSave } from '../storage/db';
 import { deleteSave, listSaves, manualSlots } from '../storage/saves';
+import {
+  SONDERZEICHEN,
+  addPassword,
+  deletePassword,
+  listPasswords,
+} from '../storage/passwords';
+import type { StoredPassword } from '../storage/db';
 import { formatBytes, isIos, isStandalone, storageStatus, type StorageStatus } from '../platform/persist';
 
 /**
@@ -68,16 +75,21 @@ export function PauseMenu(props: Props) {
   const [autoSaves, setAutoSaves] = useState<StoredSave[]>([]);
   const [speicher, setSpeicher] = useState<StorageStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [passwoerter, setPasswoerter] = useState<StoredPassword[]>([]);
+  const [pwLabel, setPwLabel] = useState('');
+  const [pwCode, setPwCode] = useState('');
 
   async function refresh() {
-    const [manual, alle, status] = await Promise.all([
+    const [manual, alle, status, pw] = await Promise.all([
       manualSlots(rom.id),
       listSaves(rom.id),
       storageStatus(),
+      listPasswords(rom.id),
     ]);
     setSlots(manual);
     setAutoSaves(alle.filter((s) => s.kind === 'auto').sort((a, b) => b.createdAt - a.createdAt));
     setSpeicher(status);
+    setPasswoerter(pw);
   }
 
   useEffect(() => {
@@ -217,6 +229,88 @@ export function PauseMenu(props: Props) {
             </div>
           </>
         ) : null}
+
+        <h3>Passwörter</h3>
+        <p>
+          Lolo speichert nicht selbst, sondern nennt dir Passwörter. Hier
+          bewahrst du sie auf — sie gelten auch auf einem anderen Gerät und
+          überstehen gelöschte Browserdaten.
+        </p>
+
+        <div class="knopf-reihe">
+          <input
+            class="eingabe"
+            placeholder="Wo? z. B. Level 12"
+            value={pwLabel}
+            onInput={(e) => setPwLabel((e.target as HTMLInputElement).value)}
+          />
+        </div>
+        <div class="knopf-reihe">
+          <input
+            class="eingabe code"
+            placeholder="Passwort"
+            value={pwCode}
+            onInput={(e) => setPwCode((e.target as HTMLInputElement).value)}
+          />
+        </div>
+
+        {/* Die vier Zeichen, die das Spiel zeigt, aber keine Tastatur hat. */}
+        <div class="zeichen-reihe">
+          {SONDERZEICHEN.map((zeichen) => (
+            <button
+              key={zeichen}
+              type="button"
+              class="zeichen"
+              onClick={() => setPwCode((vorher) => vorher + zeichen)}
+            >
+              {zeichen}
+            </button>
+          ))}
+          <button
+            type="button"
+            class="zeichen"
+            onClick={() => setPwCode((vorher) => vorher.slice(0, -1))}
+            aria-label="Letztes Zeichen löschen"
+          >
+            ⌫
+          </button>
+        </div>
+
+        <button
+          type="button"
+          class="knopf"
+          disabled={busy || pwCode.trim() === ''}
+          onClick={async () => {
+            await addPassword(rom.id, pwLabel, pwCode);
+            setPwLabel('');
+            setPwCode('');
+            setPasswoerter(await listPasswords(rom.id));
+          }}
+        >
+          Passwort merken
+        </button>
+
+        {passwoerter.map((eintrag) => (
+          <div key={eintrag.id} class="passwort">
+            <div>
+              <div class="passwort-code">{eintrag.code}</div>
+              <div class="passwort-name">
+                {eintrag.label} · {formatTime(eintrag.createdAt)}
+              </div>
+            </div>
+            <button
+              type="button"
+              class="zeichen"
+              aria-label="Löschen"
+              onClick={async () => {
+                await deletePassword(eintrag.id);
+                setPasswoerter(await listPasswords(rom.id));
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
 
         <h3>Einstellungen</h3>
 
